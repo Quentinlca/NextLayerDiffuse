@@ -1,0 +1,34 @@
+{
+    "images_saved/image_2025_04_07_15_37_35.png": {
+        "prompt": "A female pirate smoking a pipe voxel style toy_face",
+        "seed": 0,
+        "inference_steps": 20,
+        "lora_useds": [
+            "voxel",
+            "toy"
+        ],
+        "lora_weights": [
+            1.0,
+            1.0
+        ],
+        "cross_attention_kwargs": {
+            "scale": 0.85
+        }
+    },
+    "images_saved/image_2025_04_07_16_08_15.png": {
+        "prompt": "A male pirate smoking a pipe voxel style toy_face",
+        "seed": 0,
+        "inference_steps": 20,
+        "lora_useds": [
+            "voxel",
+            "toy"
+        ],
+        "lora_weights": [
+            1.0,
+            1.0
+        ],
+        "cross_attention_kwargs": {
+            "scale": 0.85
+        }
+    }
+}
