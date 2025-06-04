@@ -1,0 +1,7 @@
+
+layer_diffuse/datasets/*
+layer_diffuse/training_output/*
+layer_diffuse/wandb/
+
+# Ignore all the __pycache__ directories
+**/__pycache__/
