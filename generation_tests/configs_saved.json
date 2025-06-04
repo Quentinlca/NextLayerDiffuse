@@ -1,31 +1,149 @@
 {
-    "images_saved/image_2025_04_07_15_37_35.png": {
-        "prompt": "A female pirate smoking a pipe voxel style toy_face",
-        "seed": 0,
+    "images_saved/txt2img/image_2025_04_08_14_07_36.png": {
+        "time_steps_spacing": "trailing",
         "inference_steps": 20,
+        "guidance_scale": 10.0,
+        "prompt": "A deep forest with monkeys, detailed, realistic, 8k",
+        "nagative_prompt": "",
+        "seed": 0,
         "lora_useds": [
-            "voxel",
-            "toy"
-        ],
-        "lora_weights": [
-            1.0,
-            1.0
+            [],
+            []
         ],
         "cross_attention_kwargs": {
             "scale": 0.85
         }
     },
-    "images_saved/image_2025_04_07_16_08_15.png": {
-        "prompt": "A male pirate smoking a pipe voxel style toy_face",
-        "seed": 0,
+    "images_saved/txt2img/image_2025_04_08_14_24_17.png": {
+        "time_steps_spacing": "leading",
         "inference_steps": 20,
+        "guidance_scale": 10.0,
+        "prompt": "A deep forest with monkeys, detailed, realistic, 8k",
+        "nagative_prompt": "",
+        "seed": 0,
         "lora_useds": [
-            "voxel",
-            "toy"
+            [],
+            []
         ],
-        "lora_weights": [
-            1.0,
-            1.0
+        "cross_attention_kwargs": {
+            "scale": 0.85
+        }
+    },
+    "images_saved/txt2img/image_2025_04_08_14_24_32.png": {
+        "time_steps_spacing": "leading",
+        "inference_steps": 10,
+        "guidance_scale": 10.0,
+        "prompt": "A deep forest with monkeys, detailed, realistic, 8k",
+        "nagative_prompt": "",
+        "seed": 0,
+        "lora_useds": [
+            [],
+            []
+        ],
+        "cross_attention_kwargs": {
+            "scale": 0.85
+        }
+    },
+    "images_saved/txt2img/image_2025_04_08_14_24_52.png": {
+        "time_steps_spacing": "leading",
+        "inference_steps": 30,
+        "guidance_scale": 10.0,
+        "prompt": "A deep forest with monkeys, detailed, realistic, 8k",
+        "nagative_prompt": "",
+        "seed": 0,
+        "lora_useds": [
+            [],
+            []
+        ],
+        "cross_attention_kwargs": {
+            "scale": 0.85
+        }
+    },
+    "images_saved/txt2img/image_2025_04_08_14_26_12.png": {
+        "time_steps_spacing": "trailing",
+        "inference_steps": 10,
+        "guidance_scale": 10.0,
+        "prompt": "A deep forest with monkeys, detailed, realistic, 8k",
+        "nagative_prompt": "",
+        "seed": 0,
+        "lora_useds": [
+            [],
+            []
+        ],
+        "cross_attention_kwargs": {
+            "scale": 0.85
+        }
+    },
+    "images_saved/txt2img/image_2025_04_08_14_26_27.png": {
+        "time_steps_spacing": "trailing",
+        "inference_steps": 20,
+        "guidance_scale": 10.0,
+        "prompt": "A deep forest with monkeys, detailed, realistic, 8k",
+        "nagative_prompt": "",
+        "seed": 0,
+        "lora_useds": [
+            [],
+            []
+        ],
+        "cross_attention_kwargs": {
+            "scale": 0.85
+        }
+    },
+    "images_saved/txt2img/image_2025_04_08_14_26_45.png": {
+        "time_steps_spacing": "trailing",
+        "inference_steps": 30,
+        "guidance_scale": 10.0,
+        "prompt": "A deep forest with monkeys, detailed, realistic, 8k",
+        "nagative_prompt": "",
+        "seed": 0,
+        "lora_useds": [
+            [],
+            []
+        ],
+        "cross_attention_kwargs": {
+            "scale": 0.85
+        }
+    },
+    "images_saved/txt2img/image_2025_04_08_14_27_36.png": {
+        "time_steps_spacing": "linspace",
+        "inference_steps": 10,
+        "guidance_scale": 10.0,
+        "prompt": "A deep forest with monkeys, detailed, realistic, 8k",
+        "nagative_prompt": "",
+        "seed": 0,
+        "lora_useds": [
+            [],
+            []
+        ],
+        "cross_attention_kwargs": {
+            "scale": 0.85
+        }
+    },
+    "images_saved/txt2img/image_2025_04_08_14_28_31.png": {
+        "time_steps_spacing": "linspace",
+        "inference_steps": 20,
+        "guidance_scale": 10.0,
+        "prompt": "A deep forest with monkeys, detailed, realistic, 8k",
+        "nagative_prompt": "",
+        "seed": 0,
+        "lora_useds": [
+            [],
+            []
+        ],
+        "cross_attention_kwargs": {
+            "scale": 0.85
+        }
+    },
+    "images_saved/txt2img/image_2025_04_08_14_28_49.png": {
+        "time_steps_spacing": "linspace",
+        "inference_steps": 30,
+        "guidance_scale": 10.0,
+        "prompt": "A deep forest with monkeys, detailed, realistic, 8k",
+        "nagative_prompt": "",
+        "seed": 0,
+        "lora_useds": [
+            [],
+            []
         ],
         "cross_attention_kwargs": {
             "scale": 0.85
