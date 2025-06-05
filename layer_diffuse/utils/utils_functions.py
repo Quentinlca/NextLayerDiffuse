@@ -63,14 +63,24 @@ def save_examples(batch_input_tensors, batch_target_tensors, batch_output_tensor
     # Display the images in a grid format
     
     for i in range(len(input_images)):
-        fig, axes = display_single_image_grid(input_images[i], target_images[i], output_images[i])
+        fig, axes = get_single_image_grid(input_images[i], target_images[i], output_images[i])
         
         # Collect all figures as images, then concatenate vertically and save as one image
         fig.savefig(f"{saving_dir}/example_{i}.png", bbox_inches='tight', pad_inches=0.1)
         plt.close(fig)
 
-
-def display_single_image_grid(input_images, target_images, output_images):
+def get_single_image_grid(input_images, target_images, output_images):
+    """
+    Create a grid of images for input, target, and output.
+    
+    Args:
+        input_images (list): List of input images.
+        target_images (list): List of target images.
+        output_images (list): List of output images.
+        
+    Returns:
+        fig, axes: Matplotlib figure and axes objects.
+    """
     if len(input_images) != len(target_images) or len(input_images) != len(output_images):
         print("Warning: The number of input and output images do not match.")
         return
@@ -94,7 +104,13 @@ def display_single_image_grid(input_images, target_images, output_images):
         axes[i, 2].imshow(output_images[i])
         axes[i, 2].set_title(f"Output {i+1}")
         axes[i, 2].axis('off') # Hide axes
-    # print("Displaying images in a grid format...")
-    # plt.tight_layout() # Adjust layout to prevent overlap
-    # plt.show()
+
+    plt.tight_layout() # Adjust layout to prevent overlap
     return fig, axes
+
+
+def display_single_image_grid(input_images, target_images, output_images):
+    
+    fig, axes = get_single_image_grid(input_images, target_images, output_images)
+    # Display the grid of images
+    plt.show()
