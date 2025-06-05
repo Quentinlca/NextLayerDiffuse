@@ -108,7 +108,6 @@ def get_single_image_grid(input_images, target_images, output_images):
     plt.tight_layout() # Adjust layout to prevent overlap
     return fig, axes
 
-
 def display_single_image_grid(input_images, target_images, output_images):
     
     fig, axes = get_single_image_grid(input_images, target_images, output_images)
