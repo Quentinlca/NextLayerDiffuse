@@ -209,3 +209,80 @@ class AutoregressiveCNNGenerator(nn.Module):
 
         # Stack all generated layers
         return torch.stack(generated_layers)
+    
+
+class AutoregressiveCNNGeneratorPrompt(nn.Module):
+    """
+    Autoregressive model for RGBA character generation.
+    Works in pixel space with 64x64 images, generating one layer at a time.
+    """
+    def __init__(self):
+        super().__init__()
+        
+        self.encoder = Encoder(in_channels=4*WINDOW_SIZE)  # RGBA input (4 channels)
+        self.decoder = Decoder(out_channels=4*WINDOW_SIZE)  # RGBA output (4 channels)
+        
+    def forward(self, x):
+        """
+        Forward pass through the model.
+
+        Args:
+            x: Input image [batch_size, 4, 64, 64]  # Changed from 1 to 4 channels
+            layer_idx: Layer index to generate (0-17)
+
+        Returns:
+            Generated layer as [batch_size, 4, 64, 64]  # Changed from 1 to 4 channels
+        """
+        batch_size = x.shape[0]
+        device = x.device
+
+        # Encode input image
+        features, skip_connections = self.encoder(x)
+
+        # Decode to output image
+        output = self.decoder(features, skip_connections)
+
+        return output
+
+    # TODO : Adapt the generate sequence
+    def generate_sequence(self, seed_image=None, num_layers=None):
+        """
+        Generate a full sequence of layers starting from a seed image.
+
+        Args:
+            seed_image: Initial image (typically blank). If None, creates a blank image.
+            num_layers: Number of layers to generate. If None, uses self.num_layers.
+
+        Returns:
+            Tensor: Generated sequence of layers [num_layers, 4, 64, 64]
+        """
+        device = next(self.parameters()).device
+        num_layers = num_layers or self.num_layers
+
+        # Create a blank canvas if no seed is provided (RGBA with alpha=0)
+        if seed_image is None:
+            # Create a transparent starting image (all zeros, including alpha)
+            current_image = torch.zeros(1, 4, 64, 64, device=device)
+        else:
+            # If seed image is provided, make sure it's in [C,H,W] format
+            if seed_image.dim() == 3 and seed_image.shape[0] == 4:
+                # Already in correct [C,H,W] format
+                current_image = seed_image.unsqueeze(0).to(device)
+            elif seed_image.dim() == 3 and seed_image.shape[2] == 4:
+                # In [H,W,C] format, needs permutation
+                current_image = seed_image.permute(2, 0, 1).unsqueeze(0).to(device)
+            else:
+                raise ValueError(f"Seed image must be 3D with 4 channels, got shape {seed_image.shape}")
+
+        generated_layers = [current_image.squeeze(0)]
+
+        # Generate layers one by one
+        for i in range(1, num_layers):  # Start from 1 if we consider the seed as layer 0
+            with torch.no_grad():
+                # Generate next layer
+                next_layer = self.forward(current_image, i-1)  # i-1 because we're predicting the next layer
+                generated_layers.append(next_layer.squeeze(0))
+                current_image = next_layer
+
+        # Stack all generated layers
+        return torch.stack(generated_layers)
