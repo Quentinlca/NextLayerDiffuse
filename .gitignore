@@ -7,5 +7,7 @@ layer_diffuse/training_output/*
 
 layer_diffuse/wandb/
 
+dataset_generator/kenney_modular_characters
+
 # Ignore all the __pycache__ directories
 **/__pycache__/
