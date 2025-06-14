@@ -6,6 +6,9 @@ import numpy as np
 # Constants
 from constants import *
 
+
+
+
 class DatasetWithPrompts(torch.utils.data.Dataset):
         def __init__(self, dataset, prompts):
             self.dataset = dataset
@@ -45,7 +48,6 @@ def get_loaders(dataset_path, shuffle=True, batch_size=32, num_workers=4, train_
     val_loader = torch.utils.data.DataLoader(val_dataset, batch_size=batch_size, shuffle=shuffle, num_workers=num_workers)
     # Return both loaders
     return train_loader, val_loader
-
 
 def get_loaders_with_prompts(dataset_path, prompts_path, shuffle=True, batch_size=32, num_workers=4, train_size=0.8):
     """
