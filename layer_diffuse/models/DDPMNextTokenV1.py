@@ -31,6 +31,7 @@ from tqdm import tqdm
 from typing import Tuple
 import wandb
 import wandb.util
+import time
 
 IMAGE_SIZE = 128
 
@@ -46,7 +47,7 @@ class TrainingConfig:
     save_image_epochs = 1
     save_model_epochs = 1
     mixed_precision = "fp16"  # `no` for float32, `fp16` for automatic mixed precision
-    output_dir = "training_output2"  # the model name locally and on the HF Hub
+    output_dir = "training_outputs"  # the model name locally and on the HF Hub
 
     push_to_hub = False  # whether to upload the saved model to the HF Hub
     hub_model_id = "QLeca/NextLayerModularCharacterModel"  # the name of the repository to create on the HF Hub
@@ -92,6 +93,9 @@ class SchedulerConfig(dict):
 class DDPMNextTokenV1Pipeline():
     def __init__(self):
         self.train_config = TrainingConfig()
+        self.train_config.output_dir = os.path.join(self.train_config.output_dir, time.strftime("%Y-%m-%d_%H-%M-%S"))
+        if not os.path.exists(self.train_config.output_dir):
+            os.makedirs(self.train_config.output_dir)
         self.model_config = ModelConfig()
         self.scheduler_config = SchedulerConfig()
         self.unet = UNet2DConditionModel(**self.model_config.config)
