@@ -30,9 +30,12 @@ class NextTokenGenerator:
         print(f'Loaded dataset with {len(dataset)} sequences of {len(dataset[0])} modules ...')
         
         rows = []
+<<<<<<< HEAD
         last_char_generated = 0
         
         # Create the blank image
+=======
+>>>>>>> 459448b (added a method for uploading to the hub)
         blank_image_name = f"char_{'0'*FILE_NUMBER_LENGHT}-layer_0.png"
         blank_image_path = f'{self.images_output_dir}/0/{blank_image_name}'
         if not os.path.exists(os.path.dirname(blank_image_path)):
@@ -77,6 +80,7 @@ class NextTokenGenerator:
         return output_path
     
     @staticmethod
+<<<<<<< HEAD
     def get_output_path_list(char_id:int, layer_ids:list[int], sequence_lenght:int, output_dir:str)->list[str]:
         output_paths = []
         for layer_id in layer_ids:
@@ -88,3 +92,38 @@ class NextTokenGenerator:
             output_paths.append(output_path)
         return output_paths
     
+=======
+    def upload_dataset(dataset_path:str, repo_id:str):
+        from datasets import Dataset
+        from datasets import Features, Value, Image as HFImage
+        
+        features = Features({
+            'input': HFImage(),
+            'target': HFImage(),
+            'prompt': Value('string'),
+        })
+        
+        def convert_file_names(inputs, targets, prompts, dataset_dir):
+            for input, target, prompt in zip(inputs, targets, prompts):
+                input = os.path.join(dataset_dir, input)
+                target = os.path.join(dataset_dir, target)
+                if not os.path.exists(input) or not os.path.exists(target):
+                    continue
+                input_image = Image.open(input)
+                target_image = Image.open(target)
+                row = {'input': input_image,
+                       'target': target_image,
+                       'prompt': prompt}
+                
+                yield row
+        
+        df = pd.read_csv(dataset_path)
+        inputs = df['Input'].to_list()
+        targets = df['Target'].to_list()
+        prompts = df['Prompt'].to_list()
+        
+        dataset_to_hub = Dataset.from_generator(lambda: convert_file_names(inputs, targets, prompts, os.path.dirname(dataset_path)),
+                                                features=features, 
+                                                split='train') # type: ignore
+        dataset_to_hub.push_to_hub(repo_id=repo_id, split='train') # type: ignore
+>>>>>>> 459448b (added a method for uploading to the hub)
