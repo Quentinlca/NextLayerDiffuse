@@ -11,7 +11,7 @@ class NextTokenGenerator:
         # OUTPUT_DIR
         self.output_dir = output_dir
         if not os.path.exists(output_dir):
-            os.mkdir(output_dir)
+            os.makedirs(output_dir)
             
         # Create subdirectories for images
         self.dataset_path = f'{self.output_dir}/dataset.csv'
@@ -37,7 +37,7 @@ class NextTokenGenerator:
         blank_image_path = f'{self.images_output_dir}/0/{blank_image_name}'
         if not os.path.exists(os.path.dirname(blank_image_path)):
             os.makedirs(os.path.dirname(blank_image_path))
-        Image.new('RGBA', (IMAGE_SIZE, IMAGE_SIZE), (255, 255, 255, 0)).save(blank_image_path)
+        Image.new('RGBA', (self.image_size, self.image_size), (255, 255, 255, 0)).save(blank_image_path)
 
         if resume:
             target = pd.read_csv(self.dataset_path)['Target'].to_list()
