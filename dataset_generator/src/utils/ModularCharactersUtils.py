@@ -1,7 +1,6 @@
 import os
 import json
 from PIL import Image
-from enum import StrEnum
 from typing import Tuple
 
 MODULES_ORDER = [
@@ -211,28 +210,8 @@ MODULES_OFFSETS = {
         ]
     }
 }
-
-class CharModule(StrEnum):
-    Arm_L = 'Arm_L'
-    Arm_R = 'Arm_R'
-    Face = 'Face'
-    Hair = 'Hair'
-    Hand_L = 'Hand_L'
-    Hand_R = 'Hand_R'
-    Head = 'Head'
-    Leg_L = 'Leg_L'
-    Leg_R = 'Leg_R'
-    Neck = 'Neck'
-    Pants = 'Pants'
-    Pants_L = 'Pants_L'
-    Pants_R = 'Pants_R'
-    Shirt = 'Shirt'
-    Shirt_L = 'Shirt_L'
-    Shirt_R = 'Shirt_R'
-    Shoes_L = 'Shoes_L'
-    Shoes_R = 'Shoes_R'
-    Unknown = 'Unknown'
     
+IMAGE_SIZE = 600  # Default size for the images, can be adjusted as needed, be careful to keep it consistent with the offsets    
 
 def sort_paths_by_order(paths:list[str]) -> list[str]:
     """
@@ -303,8 +282,9 @@ def get_class_from_path(path:str)->str:
 
 def merge_composents(modules_paths: list[str], output_path:str|None=None, save=False, output_size = None) -> Tuple[Image.Image, bool]:    
     save = save and bool(output_path)
-    
+    # TODO : remove this part by preprocessing the dataset : 
     modules_paths = sort_paths_by_order(modules_paths)
+    
     images = [Image.open(path) for path in modules_paths]
     # Calculate the width and height of the merged image
     total_width = 600
@@ -337,6 +317,35 @@ def merge_composents(modules_paths: list[str], output_path:str|None=None, save=F
         
     return merged_image, save
 
+
+def add_component(base_image:Image.Image, component_path:str, output_path:str, output_image_size:int=128) -> Image.Image:    
+    component_image = Image.open(component_path)
+    
+    class_name = component_path.split('/')[-2]
+    special_type = os.path.basename(component_path).split('.')[0].split('_')[-1]
+    
+    class_offsets = MODULES_OFFSETS.get(class_name, {'standard':(0, 0)})
+    x_offset, y_offset = class_offsets.get(special_type, class_offsets['standard'])
+    
+    base_image.alpha_composite(component_image, (x_offset, y_offset))
+
+    im_to_save = base_image.resize((output_image_size, output_image_size))
+    if not os.path.exists(os.path.dirname(output_path)):
+        os.makedirs(os.path.dirname(output_path))
+    im_to_save.save(output_path)
+    return base_image
+
+
+def generate_sequence(sequence_paths:list[str], blank_path:str, output_paths:list[str], output_image_size=128) -> list[list[str]]:
+    rows = []
+    current_image = Image.new('RGBA', (IMAGE_SIZE, IMAGE_SIZE))
+    previous_path = blank_path
+    
+    for char, output_path in zip(sequence_paths, output_paths):
+        rows.append([previous_path, output_path, get_class_from_path(char)])
+        current_image = add_component(current_image, char, output_path=output_path, output_image_size=output_image_size)
+        previous_path = output_path
+    return rows
 
         
     
