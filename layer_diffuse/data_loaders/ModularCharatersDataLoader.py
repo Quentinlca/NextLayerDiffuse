@@ -1,10 +1,13 @@
 import torch
 from datasets import load_dataset
 from torchvision import transforms
+import os
 
 class ModularCharactersDataLoader(torch.utils.data.DataLoader):
     def __init__(self, dataset_name:str, split:str, image_size:int, batch_size:int=16, shuffle:bool=True) :
-        dataset = load_dataset(dataset_name,split=split)
+        if not os.path.exists('cache/datasets'):
+            os.makedirs('cache/datasets', exist_ok=True)
+        dataset = load_dataset(dataset_name, split=split)
 
         preprocess= transforms.Compose(
                 [

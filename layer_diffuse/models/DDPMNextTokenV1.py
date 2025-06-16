@@ -101,7 +101,7 @@ class DDPMNextTokenV1Pipeline():
         self.unet = UNet2DConditionModel(**self.model_config.config)
         self.scheduler=DDPMScheduler(**self.scheduler_config.config)
         self.device = torch.device('cuda') if torch.cuda.is_available() else torch.device('cpu')
-        wandb.login(key=input("Your wandb key :"))  # Ensure you have your WAN
+        wandb.login(key=os.environ.get("WANDB_API_KEY"))  # Ensure you have your WANDB_API_KEY set in your environment
 
     @torch.no_grad()
     def __call__(self, input_images: torch.Tensor, prompts, num_inference_steps: int = 50):
@@ -267,7 +267,7 @@ class DDPMNextTokenV1Pipeline():
                     optimizer.zero_grad()
 
                 progress_bar.update(1)
-                logs = {"loss": loss.detach().item(), "lr": lr_scheduler.get_last_lr()[0], "step": global_step, 'epoch': epoch}
+                logs = {"loss": loss.detach().item(), "lr": lr_scheduler.get_last_lr()[0], "step": global_step}
                 progress_bar.set_postfix(**logs)
                 accelerator.log(logs, step=global_step)
                 global_step += 1
@@ -313,9 +313,8 @@ class DDPMNextTokenV1Pipeline():
                         loss = F.mse_loss(noise_pred, noise)
                         val_loss += loss.item()
                 val_loss /= len(val_dataloader)
-                logs = {"val_loss": val_loss, "step": global_step, 'epoch': epoch}
+                logs = {"val_loss": val_loss, "step": global_step, 'epoch': epoch, "sample_image": wandb.Image(image_path)}
                 wandb.log(logs)
-                wandb.log({"sample_image": wandb.Image(image_path)})
                 accelerator.log(logs, step=global_step)
             
             if (epoch + 1) % self.train_config.save_model_epochs == 0 or epoch == self.train_config.num_epochs - 1:
