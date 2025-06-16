@@ -27,7 +27,7 @@ val_dataloader = ModularCharatersDataLoader.get_modular_char_dataloader(dataset_
                                                                           batch_size=pipeline.train_config.eval_batch_size,
                                                                           shuffle=True)
 
-pipeline.train(train_dataloader, val_dataloader,train_size = 10000, val_size = 1000)
+pipeline.train(train_dataloader, val_dataloader, train_size = 16000, val_size = 1600)
 
 # for batch in val_dataloader:
 #     images = pipeline(batch['input'], batch['prompt'])
