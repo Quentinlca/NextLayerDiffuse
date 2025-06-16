@@ -2,15 +2,15 @@
 layer_diffuse/datasets/*
 !layer_diffuse/datasets
 
-layer_diffuse/training_output/*
-!layer_diffuse/training_output
+layer_diffuse/training_outputs/*
+!layer_diffuse/training_outputs
 
 layer_diffuse/wandb/
 
 dataset_generator/modular_characters
 dataset_generator/characters.json
 dataset_generator/cache
-dataset_generator/nohup.out
+**/nohup.out
 
 
 
