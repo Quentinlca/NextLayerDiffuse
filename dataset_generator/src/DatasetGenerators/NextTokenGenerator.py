@@ -30,12 +30,9 @@ class NextTokenGenerator:
         print(f'Loaded dataset with {len(dataset)} sequences of {len(dataset[0])} modules ...')
         
         rows = []
-<<<<<<< HEAD
         last_char_generated = 0
         
         # Create the blank image
-=======
->>>>>>> 459448b (added a method for uploading to the hub)
         blank_image_name = f"char_{'0'*FILE_NUMBER_LENGHT}-layer_0.png"
         blank_image_path = f'{self.images_output_dir}/0/{blank_image_name}'
         if not os.path.exists(os.path.dirname(blank_image_path)):
@@ -80,7 +77,6 @@ class NextTokenGenerator:
         return output_path
     
     @staticmethod
-<<<<<<< HEAD
     def get_output_path_list(char_id:int, layer_ids:list[int], sequence_lenght:int, output_dir:str)->list[str]:
         output_paths = []
         for layer_id in layer_ids:
@@ -91,8 +87,8 @@ class NextTokenGenerator:
             output_path = f'{output_dir}/{sub_dir_number}/{output_name}'
             output_paths.append(output_path)
         return output_paths
-    
-=======
+
+    @staticmethod
     def upload_dataset(dataset_path:str, repo_id:str):
         from datasets import Dataset
         from datasets import Features, Value, Image as HFImage
@@ -126,4 +122,4 @@ class NextTokenGenerator:
                                                 features=features, 
                                                 split='train') # type: ignore
         dataset_to_hub.push_to_hub(repo_id=repo_id, split='train') # type: ignore
->>>>>>> 459448b (added a method for uploading to the hub)
+    
