@@ -163,9 +163,11 @@ class DDPMNextTokenV1Pipeline():
             name=f"run_{wandb.util.generate_id()}",
             config={
                 "image_size": self.train_config.image_size,
-                "train_batch_size": self.train_config.train_batch_size,
-                "eval_batch_size": self.train_config.eval_batch_size,
                 "num_epochs": self.train_config.num_epochs,
+                "train_batch_size": self.train_config.train_batch_size,
+                "train_size": train_size,
+                "val_size": val_size,
+                "eval_batch_size": self.train_config.eval_batch_size,
                 "learning_rate": self.train_config.learning_rate,
                 "lr_warmup_steps": self.train_config.lr_warmup_steps,
                 "output_dir": self.train_config.output_dir,
