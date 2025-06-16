@@ -8,7 +8,7 @@ layer_diffuse/training_outputs/*
 layer_diffuse/wandb/
 layer_diffuse/cache
 
-dataset_generator/modular_characters
+dataset_generator/generated_datasets/
 dataset_generator/characters.json
 dataset_generator/cache
 **/nohup.out
