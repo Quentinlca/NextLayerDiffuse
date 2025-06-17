@@ -273,7 +273,7 @@ class DDPMNextTokenV1Pipeline():
             
             # Training loop
             progress_bar = tqdm(total=len(train_dataloader), disable=not accelerator.is_local_main_process)
-            progress_bar.set_description(f"Epoch {epoch} :")
+            progress_bar.set_description(f"Epoch {epoch}")
             self.unet.train()
             for step, batch in enumerate(train_dataloader):
                 input_images = batch["input"].to(self.device)
