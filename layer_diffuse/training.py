@@ -3,14 +3,13 @@ from data_loaders import ModularCharatersDataLoader
 import argparse
 
 def train_loop():
-    dataset_name = "QLeca/modular_characters_v3"
     val_split = f"train"
     train_split = f"train"
     parser = argparse.ArgumentParser(description="Train DDPMNextTokenV1 model.")
     parser.add_argument('--train_size', type=int, default=16000, help='Number of training batches')
     parser.add_argument('--val_size', type=int, default=1600, help='Number of validation batches')
     parser.add_argument('--batch_size', type=int, default=16, help='Batch size for training and validation')
-    parser.add_argument('--dataset_name', type=int, default="QLeca/modular_characters_v3", help='Dataset name to use for training')
+    parser.add_argument('--dataset_name', type=str, default="QLeca/modular_characters_v3", help='Dataset name to use for training')
     
     args = parser.parse_args()
     # get the training and validation sizes from the command line arguments
