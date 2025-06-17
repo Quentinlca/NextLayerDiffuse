@@ -93,7 +93,8 @@ class SchedulerConfig(dict):
 class DDPMNextTokenV1Pipeline():
     def __init__(self):
         self.train_config = TrainingConfig()
-        self.train_config.output_dir = os.path.join(self.train_config.output_dir, time.strftime("%Y-%m-%d_%H-%M-%S"))
+        self.creation_time = time.strftime("%Y-%m-%d_%H-%M-%S")
+        self.train_config.output_dir = os.path.join(self.train_config.output_dir, self.creation_time)
         if not os.path.exists(self.train_config.output_dir):
             os.makedirs(self.train_config.output_dir)
         self.model_config = ModelConfig()
@@ -160,7 +161,7 @@ class DDPMNextTokenV1Pipeline():
     def train(self, train_dataloader, val_dataloader, train_size = 1000, val_size = 100):
         wandb.init(
             project="ddpm-next-token-v1",
-            name=f"run_{wandb.util.generate_id()}",
+            name=f"run_{self.creation_time}",
             config={
                 "image_size": self.train_config.image_size,
                 "num_epochs": self.train_config.num_epochs,
