@@ -42,12 +42,12 @@ class TrainingConfig:
     train_batch_size = 16
     eval_batch_size = 16  # how many images to sample during evaluation
     sample_size = 8  # how many images to sample during training
-    num_epochs = 1
+    num_epochs = 40
     gradient_accumulation_steps = 1
     learning_rate = 1e-4
     lr_warmup_steps = 500
     save_image_epochs = 1
-    save_model_epochs = 1
+    save_model_epochs = 5
     mixed_precision = "fp16"  # `no` for float32, `fp16` for automatic mixed precision
     output_dir = "training_outputs/DDPMNextTokenV1"  # the model name locally and on the HF Hub
     backup_output_dir = "training_outputs/DDPMNextTokenV1_backup"  # the model name locally and on the HF Hub if push_to_hub fails
@@ -148,7 +148,7 @@ class DDPMNextTokenV1Pipeline():
         
         input_images = torch.stack(random_sample['input']).to(self.device)
         target_images = torch.stack(random_sample['target']).to(self.device)
-        prompts = dataloader.dataset[random_sample]['prompt']
+        prompts = random_sample['prompt']
         
         outputs = self.__call__(input_images, prompts, num_inference_steps)
         
@@ -357,7 +357,7 @@ class DDPMNextTokenV1Pipeline():
                     wandb.log({"sample_images": wandb.Image(image_path, caption=f"Epoch {epoch} samples"), 'epoch': epoch})
                 # Saving the images
                 if (epoch + 1) % self.train_config.save_model_epochs == 0 or epoch == self.train_config.num_epochs - 1:
-                    self.save_model(revision=self.train_id, epoch=epoch+1)
+                    self.save_model(revision=self.train_id, epoch=epoch)
 
     def save_model(self, revision: str = 'main', epoch: int=0):
         commit_message = f"Model saved at epoch {epoch}"
