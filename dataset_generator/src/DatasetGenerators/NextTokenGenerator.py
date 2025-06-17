@@ -101,8 +101,8 @@ class NextTokenGenerator:
         
         def convert_file_names(inputs, targets, prompts, dataset_dir):
             for input, target, prompt in zip(inputs, targets, prompts):
-                input = os.path.join(dataset_dir, input)
-                target = os.path.join(dataset_dir, target)
+                # input = os.path.join(dataset_dir, input)
+                # target = os.path.join(dataset_dir, target)
                 if not os.path.exists(input) or not os.path.exists(target):
                     continue
                 input_image = Image.open(input)
