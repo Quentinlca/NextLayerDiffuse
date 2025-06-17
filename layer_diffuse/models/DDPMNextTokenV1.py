@@ -243,7 +243,8 @@ class DDPMNextTokenV1Pipeline():
             # Take a random subset of the training dataset of size train_size
             if train_size is not None and train_size < len(train_dataloader.dataset): # type: ignore
                 indices = torch.randperm(len(train_dataloader.dataset), # type: ignore
-                                         generator=random_generator)[:train_size] 
+                                         generator=random_generator,
+                                         device=self.device)[:train_size] 
                 subset = torch.utils.data.Subset(train_dataloader.dataset, indices) # type: ignore
                 train_dataloader = torch.utils.data.DataLoader(
                     subset,
@@ -255,7 +256,8 @@ class DDPMNextTokenV1Pipeline():
                 )
             if val_size is not None and val_size < len(val_dataloader.dataset): # type: ignore
                 indices = torch.randperm(len(val_dataloader.dataset), # type: ignore
-                                         generator=random_generator)[:val_size] 
+                                         generator=random_generator,
+                                         device=self.device)[:val_size] 
                 subset = torch.utils.data.Subset(val_dataloader.dataset, indices) # type: ignore
                 val_dataloader = torch.utils.data.DataLoader(
                     subset,
