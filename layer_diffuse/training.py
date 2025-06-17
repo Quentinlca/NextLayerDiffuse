@@ -35,7 +35,7 @@ def train_loop():
                                                                             batch_size=pipeline.train_config.eval_batch_size,
                                                                             shuffle=True)
     # Start the training process
-    pipeline.train(train_dataloader=train_dataloader, 
+    pipeline.train_accelerate(train_dataloader=train_dataloader, 
                    val_dataloader=val_dataloader, 
                    train_size=train_size, 
                    val_size=val_size)
