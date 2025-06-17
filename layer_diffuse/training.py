@@ -3,7 +3,7 @@ from data_loaders import ModularCharatersDataLoader
 import argparse
 
 def train_loop():
-    dataset_name = "QLeca/modular_charactersv2"
+    dataset_name = "QLeca/modular_characters_v3"
     val_split = f"train"
     train_split = f"train"
     parser = argparse.ArgumentParser(description="Train DDPMNextTokenV1 model.")

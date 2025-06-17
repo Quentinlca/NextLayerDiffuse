@@ -18,6 +18,7 @@ from diffusers.pipelines.pipeline_utils import DiffusionPipeline
 
 from accelerate import Accelerator
 from huggingface_hub import create_repo, upload_folder
+import huggingface_hub
 from tqdm.auto import tqdm
 from pathlib import Path
 import os
@@ -40,21 +41,20 @@ class TrainingConfig:
     image_size = IMAGE_SIZE  # the generated image resolution
     train_batch_size = 16
     eval_batch_size = 16  # how many images to sample during evaluation
-    num_epochs = 50
+    sample_size = 8  # how many images to sample during training
+    num_epochs = 1
     gradient_accumulation_steps = 1
     learning_rate = 1e-4
     lr_warmup_steps = 500
     save_image_epochs = 1
     save_model_epochs = 1
     mixed_precision = "fp16"  # `no` for float32, `fp16` for automatic mixed precision
-    output_dir = "training_outputs"  # the model name locally and on the HF Hub
-
-    push_to_hub = False  # whether to upload the saved model to the HF Hub
-    hub_model_id = "QLeca/NextLayerModularCharacterModel"  # the name of the repository to create on the HF Hub
-    hub_private_repo = None
-    overwrite_output_dir = True  # overwrite the old model when re-running the notebook
+    output_dir = "training_outputs/DDPMNextTokenV1"  # the model name locally and on the HF Hub
+    backup_output_dir = "training_outputs/DDPMNextTokenV1_backup"  # the model name locally and on the HF Hub if push_to_hub fails
+    push_to_hub = True  # whether to upload the saved model to the HF Hub
+    hub_model_id = "QLeca/DDPMNextTokenV1"  # the name of the repository to create on the HF Hub
     seed = 0
-    repo_id = ''
+    wandb_project_name = "ddpm-next-token-v1"  # the name of the project on Weights & Biases
 
 class ModelConfig(dict):
     def __init__(self) -> None:
@@ -92,20 +92,31 @@ class SchedulerConfig(dict):
 
 class DDPMNextTokenV1Pipeline():
     def __init__(self):
+        # Initialize the training and model configurations
+        self.train_id = ''
         self.train_config = TrainingConfig()
-        self.creation_time = time.strftime("%Y-%m-%d_%H-%M-%S")
-        self.train_config.output_dir = os.path.join(self.train_config.output_dir, self.creation_time)
-        if not os.path.exists(self.train_config.output_dir):
-            os.makedirs(self.train_config.output_dir)
         self.model_config = ModelConfig()
         self.scheduler_config = SchedulerConfig()
         self.unet = UNet2DConditionModel(**self.model_config.config)
         self.scheduler=DDPMScheduler(**self.scheduler_config.config)
         self.device = torch.device('cuda') if torch.cuda.is_available() else torch.device('cpu')
         wandb.login(key=os.environ.get("WANDB_API_KEY"))  # Ensure you have your WANDB_API_KEY set in your environment
-
+        huggingface_hub.login(token=os.environ.get("HUGGINGFACE_HUB_TOKEN"), new_session=False)  # Ensure you have your HUGGINGFACE_HUB_TOKEN set in your environment
+        
+        if not os.path.exists(self.train_config.output_dir):
+            os.makedirs(self.train_config.output_dir)
+        if not huggingface_hub.repo_exists(self.train_config.hub_model_id):
+            self.repo_URL = create_repo(repo_id=self.train_config.hub_model_id, exist_ok=True)
+            print(f"Created repository {self.train_config.hub_model_id} on Hugging Face Hub.")
+        self.repo = huggingface_hub.Repository(
+            local_dir=self.train_config.output_dir,
+            clone_from=self.train_config.hub_model_id,
+            git_user="QLeca",
+            git_email="quentin.leca@polytechnique.edu")
+        self.repo.git_pull(rebase=True)  # Pull the latest changes from the hub
+        
     @torch.no_grad()
-    def __call__(self, input_images: torch.Tensor, prompts, num_inference_steps: int = 50):
+    def __call__(self, input_images: torch.Tensor, prompts: list[str], num_inference_steps: int = 50):
         self.unet.eval()
 
         xt = torch.randn((input_images.shape[0],
@@ -130,7 +141,12 @@ class DDPMNextTokenV1Pipeline():
         return xt
             
     @torch.no_grad()
-    def save_training_samples(self, input_images, target_images, prompts, epoch:int, num_inference_steps: int = 50, ):
+    def save_training_samples(self, dataloader, epoch:int, generator: torch.Generator | None = None, num_inference_steps: int = 50) -> str:
+        random_sample = torch.randint(0, len(dataloader.dataset), (self.train_config.sample_size,), device=self.device, generator=generator) # type: ignore
+        input_images = dataloader.dataset[random_sample]['input'].unsqueeze(0).to(self.device)
+        target_images = dataloader.dataset[random_sample]['target'].unsqueeze(0).to(self.device)
+        prompts = dataloader.dataset[random_sample]['prompt']
+        
         outputs = self.__call__(input_images, prompts, num_inference_steps)
         
         images = (outputs / 2 + 0.5).clamp(0, 1)
@@ -145,11 +161,21 @@ class DDPMNextTokenV1Pipeline():
         concat = torch.concat([input_images, images, targets],dim=0)
         grid = make_grid(concat, nrow=images.shape[0])
         img = torchvision.transforms.ToPILImage()(grid)
-        if not os.path.exists(os.path.join(self.train_config.output_dir, 'samples_epoch_{}'.format(epoch))):
-            os.mkdir(os.path.join(self.train_config.output_dir, 'samples_epoch_{}'.format(epoch)))
-        img.save(os.path.join(self.train_config.output_dir, 'samples_epoch_{}'.format(epoch), 'result_epoch_{}.png'.format(epoch)))
-        img.close()
-        return os.path.join(self.train_config.output_dir, 'samples_epoch_{}'.format(epoch), 'result_epoch_{}.png'.format(epoch))
+        if self.train_config.push_to_hub:
+            print(f"Saving sample images to {self.train_config.output_dir} ...")
+            self.repo.git_checkout(revision=self.train_id, create_branch_ok=True)
+            img.save(os.path.join(self.train_config.output_dir, 'result_epoch_{}.png'.format(epoch)))
+            self.repo.push_to_hub(commit_message=f"Sample images for epoch {epoch}")
+            img.close()
+            return os.path.join(self.train_config.output_dir, 'result_epoch_{}.png'.format(epoch))
+        else:
+            save_dir = os.path.join(self.train_config.backup_output_dir, self.train_id)
+            if not os.path.exists(save_dir):
+                os.makedirs(save_dir)
+            print(f"Saving sample images to {save_dir} ...")
+            img.save(os.path.join(save_dir, 'result_epoch_{}.png'.format(epoch)))
+            img.close()
+            return os.path.join(save_dir, 'result_epoch_{}.png'.format(epoch))
 
     def train_accelerate(self, train_dataloader, val_dataloader, train_size = 1000, val_size = 100):
 
@@ -159,9 +185,12 @@ class DDPMNextTokenV1Pipeline():
         notebook_launcher(self.train, args, num_processes=1)
 
     def train(self, train_dataloader, val_dataloader, train_size = 1000, val_size = 100):
+        self.train_id = f"run_{time.strftime('%Y-%m-%d_%H-%M-%S')}"
+        
+        # Initialize the wandb run
         wandb.init(
-            project="ddpm-next-token-v1",
-            name=f"run_{self.creation_time}",
+            project=self.train_config.wandb_project_name,
+            name=f"run_{self.train_id}",
             config={
                 "image_size": self.train_config.image_size,
                 "num_epochs": self.train_config.num_epochs,
@@ -176,15 +205,15 @@ class DDPMNextTokenV1Pipeline():
             }
         )
 
-        # Initialize accelerator and tensorboard logging
-        
+        # Create the optimizer and learning rate scheduler
         optimizer = torch.optim.AdamW(self.unet.parameters(), lr=self.train_config.learning_rate)
         lr_scheduler = get_cosine_schedule_with_warmup(
                                                         optimizer=optimizer,
                                                         num_warmup_steps=self.train_config.lr_warmup_steps,
-                                                        num_training_steps=(len(train_dataloader) * self.train_config.num_epochs),
+                                                        num_training_steps=(train_size * self.train_config.num_epochs),
                                                     )
         
+        # Initialize accelerator and tensorboard logging
         accelerator = Accelerator(
             mixed_precision=self.train_config.mixed_precision,
             gradient_accumulation_steps=self.train_config.gradient_accumulation_steps,
@@ -192,14 +221,13 @@ class DDPMNextTokenV1Pipeline():
             project_dir=os.path.join(self.train_config.output_dir, "logs")
         )
         
+        # Create the repo if push_to_hub is enabled
         if accelerator.is_main_process:
-            if self.train_config.output_dir is not None:
-                os.makedirs(self.train_config.output_dir, exist_ok=True)
-            if self.train_config.push_to_hub:
-                self.train_config.repo_id = create_repo(
-                    repo_id=self.train_config.hub_model_id or Path(self.train_config.output_dir).name, exist_ok=True
-                ).repo_id
-            accelerator.init_trackers("train_example")
+            if self.train_config.push_to_hub :
+                print(f"Creating branch {self.train_id} in repository {self.train_config.hub_model_id} ...")
+                # Create a new branch for this run with the name of the run
+                self.repo.git_checkout(revision=self.train_id, create_branch_ok=True)
+            
 
         # Prepare everything
         # There is no specific order to remember, you just need to unpack the
@@ -210,10 +238,12 @@ class DDPMNextTokenV1Pipeline():
 
         global_step = 0
         # Now you train the model
+        random_generator = torch.Generator(device=self.device) # For the dataset sampling
         for epoch in range(self.train_config.num_epochs):
             # Take a random subset of the training dataset of size train_size
             if train_size is not None and train_size < len(train_dataloader.dataset): # type: ignore
-                indices = torch.randperm(len(train_dataloader.dataset))[:train_size] # type: ignore
+                indices = torch.randperm(len(train_dataloader.dataset), # type: ignore
+                                         generator=random_generator)[:train_size] 
                 subset = torch.utils.data.Subset(train_dataloader.dataset, indices) # type: ignore
                 train_dataloader = torch.utils.data.DataLoader(
                     subset,
@@ -224,7 +254,8 @@ class DDPMNextTokenV1Pipeline():
                     drop_last=getattr(train_dataloader, 'drop_last', False),
                 )
             if val_size is not None and val_size < len(val_dataloader.dataset): # type: ignore
-                indices = torch.randperm(len(val_dataloader.dataset))[:val_size] # type: ignore
+                indices = torch.randperm(len(val_dataloader.dataset), # type: ignore
+                                         generator=random_generator)[:val_size] 
                 subset = torch.utils.data.Subset(val_dataloader.dataset, indices) # type: ignore
                 val_dataloader = torch.utils.data.DataLoader(
                     subset,
@@ -234,6 +265,8 @@ class DDPMNextTokenV1Pipeline():
                     pin_memory=getattr(val_dataloader, 'pin_memory', False),
                     drop_last=getattr(val_dataloader, 'drop_last', False),
                 )
+            
+            # Training loop
             progress_bar = tqdm(total=len(train_dataloader), disable=not accelerator.is_local_main_process)
             progress_bar.set_description(f"Epoch {epoch} :")
             self.unet.train()
@@ -270,64 +303,82 @@ class DDPMNextTokenV1Pipeline():
                     optimizer.zero_grad()
 
                 progress_bar.update(1)
-                logs = {"loss": loss.detach().item(), "lr": lr_scheduler.get_last_lr()[0], "step": global_step}
+                logs = {"loss": loss.detach().item(), "lr": lr_scheduler.get_last_lr()[0], "step": global_step, 'epoch': epoch}
                 progress_bar.set_postfix(**logs)
                 accelerator.log(logs, step=global_step)
                 global_step += 1
                 wandb.log(logs)
 
-            # After each epoch you optionally sample some demo images with evaluate() and save the model
-
-            if (epoch + 1) % self.train_config.save_image_epochs == 0 or epoch == self.train_config.num_epochs - 1:
+            # Evaluation loop
+            with torch.no_grad():   
                 val_loss = 0.0
                 self.unet.eval()
-                with torch.no_grad():
-                    save_image = False
-                    image_path = ''
-                    for batch in tqdm(val_dataloader, desc="Evaluating"):
-                        input_images = batch["input"].to(self.device)
-                        target_images = batch["target"].to(self.device)
-                        prompts = batch['prompt']
-                        
-                        if not save_image:
-                            image_path = self.save_training_samples(input_images=input_images,
-                                                        target_images=target_images,
-                                                        prompts=prompts,
-                                                        epoch=epoch)
-                            save_image = True
-                        
-                        # Sample noise to add to the images
-                        noise = torch.randn(target_images.shape, device=self.device)
-                        bs = target_images.shape[0]
+                for batch in tqdm(val_dataloader, desc="Evaluating"):
+                    input_images = batch["input"].to(self.device)
+                    target_images = batch["target"].to(self.device)
+                    prompts = batch['prompt']
+                    
+                    # Sample noise to add to the images
+                    noise = torch.randn(target_images.shape, device=self.device)
+                    bs = target_images.shape[0]
 
-                        # Sample a random timestep for each image
-                        timesteps = torch.randint(
-                            0, self.scheduler.config['num_train_timesteps'], (bs,), device=self.device,
-                            dtype=torch.int
-                        )
-                        # Add noise to the clean images according to the noise magnitude at each timestep
-                        # (this is the forward diffusion process)
-                        noisy_targets = self.scheduler.add_noise(target_images, noise, timesteps) # type: ignore
-                        # Predict the noise residual
-                        noisy_samples = torch.concat([input_images, noisy_targets], dim=1)
-                        noise_pred = self.unet(sample=noisy_samples,
-                                                timestep=timesteps,
-                                                encoder_hidden_states=torch.zeros([noisy_samples.shape[0],32,1280]).to(self.device)).sample
-                        loss = F.mse_loss(noise_pred, noise)
-                        val_loss += loss.item()
+                    # Sample a random timestep for each image
+                    timesteps = torch.randint(
+                        0, self.scheduler.config['num_train_timesteps'], (bs,), device=self.device,
+                        dtype=torch.int
+                    )
+                    # Add noise to the clean images according to the noise magnitude at each timestep
+                    # (this is the forward diffusion process)
+                    noisy_targets = self.scheduler.add_noise(target_images, noise, timesteps) # type: ignore
+                    # Predict the noise residual
+                    noisy_samples = torch.concat([input_images, noisy_targets], dim=1)
+                    noise_pred = self.unet(sample=noisy_samples,
+                                            timestep=timesteps,
+                                            encoder_hidden_states=torch.zeros([noisy_samples.shape[0],32,1280]).to(self.device)).sample
+                    loss = F.mse_loss(noise_pred, noise)
+                    val_loss += loss.item()
                 val_loss /= len(val_dataloader)
-                logs = {"val_loss": val_loss, "step": global_step, 'epoch': epoch, "sample_image": wandb.Image(image_path)}
+                logs = {"val_loss": val_loss, "step": global_step, 'epoch': epoch}
                 wandb.log(logs)
                 accelerator.log(logs, step=global_step)
             
-            if (epoch + 1) % self.train_config.save_model_epochs == 0 or epoch == self.train_config.num_epochs - 1:
-                print(f"Saving model at epoch {epoch + 1} to {self.train_config.output_dir} ...")
-                if not os.path.exists(os.path.join(self.train_config.output_dir, 'epoch_{}'.format(epoch))):
-                    os.mkdir(os.path.join(self.train_config.output_dir, 'epoch_{}'.format(epoch)))
-                self.unet.save_pretrained(os.path.join(self.train_config.output_dir, 'epoch_{}'.format(epoch)))
+                        # After each epoch you optionally sample some demo images with evaluate() and save the model
+            
+            # Saving the model and images
+            if accelerator.is_main_process:
+                # Saving the images
+                if (epoch + 1) % self.train_config.save_image_epochs == 0 or epoch == self.train_config.num_epochs - 1:
+                    image_path = self.save_training_samples(dataloader=val_dataloader, epoch=epoch, generator=random_generator, num_inference_steps=50)
+                    wandb.log({"sample_images": wandb.Image(image_path, caption=f"Epoch {epoch} samples"), 'epoch': epoch})
+                # Saving the images
+                if (epoch + 1) % self.train_config.save_model_epochs == 0 or epoch == self.train_config.num_epochs - 1:
+                    self.save_model(revision=self.train_id, epoch=epoch+1)
 
-    def load_config(self, model_dir):
+    def save_model(self, revision: str = 'main', epoch: int=0):
+        commit_message = f"Model saved at epoch {epoch}"
+        if self.train_config.push_to_hub:
+            print(f"Saving model to {self.train_config.output_dir} : {commit_message} ...")
+            self.repo.git_checkout(revision=revision, create_branch_ok=True)
+            self.unet.save_pretrained(self.train_config.output_dir)
+            response = self.repo.push_to_hub(commit_message=commit_message)
+            if response is not None:
+                print(f"Model saved to {self.train_config.hub_model_id} : {commit_message}.")
+            else:
+                save_dir = os.path.join(self.train_config.backup_output_dir, self.train_id)
+                if not os.path.exists(save_dir):
+                    os.makedirs(save_dir)
+                print(f"Failed to push to hub, saving model to {save_dir} instead.")
+                self.unet.save_pretrained(save_dir, variant=f'epoch_{epoch}')
+                print(f"Model saved to {save_dir} : {commit_message}.")
+        else:
+            save_dir = os.path.join(self.train_config.backup_output_dir, self.train_id, f'epoch_{epoch}')
+            if not os.path.exists(save_dir):
+                os.makedirs(save_dir)
+            print(f"Saving model to {save_dir} ...")
+            self.unet.save_pretrained(save_dir)
+            print(f"Model saved to {save_dir} : {commit_message}.")
+        
+    def load_model(self, model_dir):
         self.unet.from_pretrained(model_dir)
         self.unet.to(self.device) # type: ignore
         print('Model Loaded')
-            
