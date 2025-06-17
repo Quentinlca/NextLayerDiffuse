@@ -143,9 +143,11 @@ class DDPMNextTokenV1Pipeline():
             
     @torch.no_grad()
     def save_training_samples(self, dataloader, epoch:int, generator: torch.Generator | None = None, num_inference_steps: int = 50) -> str:
-        random_sample = torch.randint(0, len(dataloader.dataset), (self.train_config.sample_size,), device=self.device, generator=generator) # type: ignore
-        input_images = dataloader.dataset[random_sample]['input'].unsqueeze(0).to(self.device)
-        target_images = dataloader.dataset[random_sample]['target'].unsqueeze(0).to(self.device)
+        random_sample_idx = torch.randint(0, len(dataloader.dataset), (self.train_config.sample_size,), device=self.device, generator=generator) # type: ignore
+        random_sample = dataloader.dataset[random_sample_idx]
+        
+        input_images = torch.stack(random_sample['input']).to(self.device)
+        target_images = torch.stack(random_sample['target']).to(self.device)
         prompts = dataloader.dataset[random_sample]['prompt']
         
         outputs = self.__call__(input_images, prompts, num_inference_steps)
