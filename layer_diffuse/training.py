@@ -17,6 +17,7 @@ def train_loop():
     train_size = args.train_size
     val_size = args.val_size
     batch_size = args.batch_size
+    dataset_name = args.dataset_name
     
     # Initialize the DDPMNextTokenV1 pipeline
     pipeline = DDPMNextTokenV1.DDPMNextTokenV1Pipeline()
