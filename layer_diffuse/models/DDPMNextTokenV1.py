@@ -113,6 +113,7 @@ class DDPMNextTokenV1Pipeline():
             clone_from=self.train_config.hub_model_id,
             git_user="QLeca",
             git_email="quentin.leca@polytechnique.edu")
+        self.repo.git_checkout(revision='main', create_branch_ok=True)  # Checkout the main branch
         self.repo.git_pull(rebase=True)  # Pull the latest changes from the hub
         
     @torch.no_grad()
@@ -190,7 +191,7 @@ class DDPMNextTokenV1Pipeline():
         # Initialize the wandb run
         wandb.init(
             project=self.train_config.wandb_project_name,
-            name=f"run_{self.train_id}",
+            name=self.train_id,
             config={
                 "image_size": self.train_config.image_size,
                 "num_epochs": self.train_config.num_epochs,
