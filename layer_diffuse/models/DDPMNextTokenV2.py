@@ -43,12 +43,12 @@ class TrainingConfig:
     train_batch_size = 16
     eval_batch_size = 16  # how many images to sample during evaluation
     sample_size = 8  # how many images to sample during training
-    num_epochs = 40
+    num_epochs = 50
     gradient_accumulation_steps = 1
     learning_rate = 1e-4
     lr_warmup_steps = 500
     save_image_epochs = 1
-    save_model_epochs = 5
+    save_model_epochs = 1
     mixed_precision = "fp16"  # `no` for float32, `fp16` for automatic mixed precision
     output_dir = "training_outputs/DDPMNextTokenV2"  # the model name locally and on the HF Hub
     backup_output_dir = "training_outputs/DDPMNextTokenV2_backup"  # the model name locally and on the HF Hub if push_to_hub fails
