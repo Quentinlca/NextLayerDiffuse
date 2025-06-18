@@ -29,7 +29,7 @@ class ModularCharactersDataLoader(torch.utils.data.DataLoader):
             class_labels = [torch.tensor(self.vocab.get(prompt,-1),dtype=torch.long).unsqueeze(0) for prompt in rows['prompt']]
             return {'input': images_input,
                     'target': images_target,
-                    'labels': class_labels}
+                    'label': class_labels}
         dataset.set_transform(transform) # type: ignore
         
         return super().__init__(dataset,  # type: ignore
