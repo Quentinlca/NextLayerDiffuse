@@ -16,18 +16,18 @@ class CharacterGenerator:
             os.mkdir(output_dir)
         pass
     
-    def generate_char_path_seq(self, output_path:str|None=None, save=True) -> Tuple[list[list[str]], str|None]:
+    def generate_small_dataset(self, output_path:str|None=None, save=True) -> Tuple[list[list[str]], str|None]:
         if not output_path and save:
             output_path = f'{self.output_dir}/characters_sequences.json'
         
         characters = []
         
-        heads = [f'{self.assets_dir}/Head/{f}' for f in os.listdir(f'{self.assets_dir}/Head') if f.endswith('.png')]
-        hairs = [f'{self.assets_dir}/Hair/{f}' for f in os.listdir(f'{self.assets_dir}/Hair') if f.endswith('.png')][0:15]
-        faces = [f'{self.assets_dir}/Face/{f}' for f in os.listdir(f'{self.assets_dir}/Face') if f.endswith('.png')][0:1]
-        shoes = [f'{self.assets_dir}/Shoes_L/{f}' for f in os.listdir(f'{self.assets_dir}/Shoes_L') if f.endswith('.png')][0:1]
-        pants_L = [f'{self.assets_dir}/Pants_L/{f}' for f in os.listdir(f'{self.assets_dir}/Pants_L') if f.endswith('.png')]
-        shirts_L = [f'{self.assets_dir}/Shirt_L/{f}' for f in os.listdir(f'{self.assets_dir}/Shirt_L') if f.endswith('.png')]
+        heads = [f'{self.assets_dir}/Head/{f}' for f in os.listdir(f'{self.assets_dir}/Head') if f.endswith('.png')] # Only 1 tint
+        hairs = [f'{self.assets_dir}/Hair/{f}' for f in os.listdir(f'{self.assets_dir}/Hair') if f.endswith('Man1.png')] 
+        faces = [f'{self.assets_dir}/Face/{f}' for f in os.listdir(f'{self.assets_dir}/Face') if f.endswith('.png')][0:1] # Only 1 face
+        shoes = [f'{self.assets_dir}/Shoes_L/{f}' for f in os.listdir(f'{self.assets_dir}/Shoes_L') if f.endswith('.png')][0:1] # Only 1 shoe
+        pants_L = [f'{self.assets_dir}/Pants_L/{f}' for f in os.listdir(f'{self.assets_dir}/Pants_L') if f.endswith('.png') and (f.startswith('pantsBlue1') or f.startswith('pantsRed'))] 
+        shirts_L = [f'{self.assets_dir}/Shirt_L/{f}' for f in os.listdir(f'{self.assets_dir}/Shirt_L') if f.endswith('.png') and (f.startswith('blue') or f.startswith('red'))]
         
         for head in tqdm(heads, desc='Heads :'):
             tint = os.path.basename(head).split('_')[0]
@@ -47,7 +47,7 @@ class CharacterGenerator:
                         for pant_L in pants_L:
                             pant_R = f'{self.assets_dir}/Pants_R/{os.path.basename(pant_L)}'
                             pants_color = os.path.basename(pant_L).split('_')[0]
-                            pants = [f'{self.assets_dir}/Pants/{f}' for f in os.listdir(f'{self.assets_dir}/Pants') if f.endswith('.png') and pants_color in f]
+                            pants = [f'{self.assets_dir}/Pants/{f}' for f in os.listdir(f'{self.assets_dir}/Pants') if f.endswith('.png') and pants_color in f][0:1]
                             for pant in pants:
                                 for shirt_L in shirts_L:
                                     shirt_R = f'{self.assets_dir}/Shirt_R/{os.path.basename(shirt_L)}'
@@ -63,7 +63,6 @@ class CharacterGenerator:
             f.close()
         return characters, output_path
     
-
     def generate_random_character(self, output_path: str|None = None, logic=True, save=True) -> Tuple[Image.Image, list[str], str|None]:
         """
         Generates a random character by merging components from the assets directory.
@@ -114,4 +113,51 @@ class CharacterGenerator:
         assert len(char_path_seq) == len(classes)                
         merged_image, saved = merge_composents(modules_paths=char_path_seq, output_path=output_path, save=save)
         return merged_image, char_path_seq, output_path
+      
+    def generate_char_path_seq(self, output_path:str|None=None, save=True) -> Tuple[list[list[str]], str|None]:
+        if not output_path and save:
+            output_path = f'{self.output_dir}/characters_sequences.json'
         
+        characters = []
+        
+        heads = [f'{self.assets_dir}/Head/{f}' for f in os.listdir(f'{self.assets_dir}/Head') if f.endswith('.png')]
+        hairs = [f'{self.assets_dir}/Hair/{f}' for f in os.listdir(f'{self.assets_dir}/Hair') if f.endswith('.png')][0:15]
+        faces = [f'{self.assets_dir}/Face/{f}' for f in os.listdir(f'{self.assets_dir}/Face') if f.endswith('.png')][0:1]
+        shoes = [f'{self.assets_dir}/Shoes_L/{f}' for f in os.listdir(f'{self.assets_dir}/Shoes_L') if f.endswith('.png')][0:1]
+        pants_L = [f'{self.assets_dir}/Pants_L/{f}' for f in os.listdir(f'{self.assets_dir}/Pants_L') if f.endswith('.png')]
+        shirts_L = [f'{self.assets_dir}/Shirt_L/{f}' for f in os.listdir(f'{self.assets_dir}/Shirt_L') if f.endswith('.png')]
+        
+        for head in tqdm(heads, desc='Heads :'):
+            tint = os.path.basename(head).split('_')[0]
+            arm_L = f'{self.assets_dir}/Arm_L/{tint}_arm.png'
+            arm_R = f'{self.assets_dir}/Arm_R/{tint}_arm.png'
+            neck = f'{self.assets_dir}/Neck/{tint}_neck.png'
+            hand_L = f'{self.assets_dir}/Hand_L/{tint}_hand.png'
+            hand_R = f'{self.assets_dir}/Hand_R/{tint}_hand.png'
+            leg_L = f'{self.assets_dir}/Leg_L/{tint}_leg.png'
+            leg_R = f'{self.assets_dir}/Leg_R/{tint}_leg.png'
+            
+            for hair in tqdm(hairs, desc='Hairs :'):
+                for face in faces:
+                    for shoe_L in shoes:
+                        shoe_R = f'{self.assets_dir}/Shoes_R/{os.path.basename(shoe_L)}'
+                        
+                        for pant_L in pants_L:
+                            pant_R = f'{self.assets_dir}/Pants_R/{os.path.basename(pant_L)}'
+                            pants_color = os.path.basename(pant_L).split('_')[0]
+                            pants = [f'{self.assets_dir}/Pants/{f}' for f in os.listdir(f'{self.assets_dir}/Pants') if f.endswith('.png') and pants_color in f]
+                            for pant in pants:
+                                for shirt_L in shirts_L:
+                                    shirt_R = f'{self.assets_dir}/Shirt_R/{os.path.basename(shirt_L)}'
+                                    shirt_color = os.path.basename(shirt_L).split('_')[0][:-3]
+                                    shirts = [f'{self.assets_dir}/Shirt/{f}' for f in os.listdir(f'{self.assets_dir}/Shirt') if f.endswith('.png') and shirt_color in f][0:1]
+                                    for shirt in shirts:
+                                        image_paths = [head, arm_L, arm_R, neck, leg_L, leg_R, hand_L, hand_R, pant, pant_L, pant_R, shirt, shirt_L, shirt_R, shoe_L, shoe_R, hair, face]
+                                        image_paths = sort_paths_by_order(image_paths)
+                                        characters.append(image_paths)
+        if save and output_path:                          
+            with open(output_path,mode='w') as f:
+                json.dump(characters,f, indent=4)
+            f.close()
+        return characters, output_path
+          
