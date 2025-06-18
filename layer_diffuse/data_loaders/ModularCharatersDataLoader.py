@@ -9,19 +9,19 @@ class ModularCharactersDataLoader(torch.utils.data.DataLoader):
             os.makedirs('cache/datasets', exist_ok=True)
         dataset = load_dataset(dataset_name, split=split)
 
-        preprocess= transforms.Compose(
+        preprocess = transforms.Compose(
                 [
                     transforms.Resize((image_size, image_size)),
                     transforms.RandomHorizontalFlip(),
                     transforms.ToTensor(),
-                    transforms.Normalize([0.0], [0.5]),
+                    transforms.Normalize([0.5], [0.5]),
                 ]
             )
         
         def transform(rows:dict)->dict:
-            images_input = [preprocess(image) for image in rows["input"]]
-            images_target = [preprocess(image) for image in rows["target"]]
-            return {"input": images_input,
+            images_input = [preprocess(image) for image in rows['input']]
+            images_target = [preprocess(image) for image in rows['target']]
+            return {'input': images_input,
                     'target': images_target,
                     'prompt': rows['prompt']}
         dataset.set_transform(transform) # type: ignore

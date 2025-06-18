@@ -94,6 +94,7 @@ class DDPMNextTokenV1Pipeline():
     def __init__(self):
         # Initialize the training and model configurations
         self.train_id = ''
+        self.model_version = ''
         self.train_config = TrainingConfig()
         self.model_config = ModelConfig()
         self.scheduler_config = SchedulerConfig()
@@ -146,23 +147,20 @@ class DDPMNextTokenV1Pipeline():
         random_sample_idx = torch.randint(0, len(dataloader.dataset), (self.train_config.sample_size,), device=self.device, generator=generator) # type: ignore
         random_sample = dataloader.dataset[random_sample_idx]
         
-        input_images = torch.stack(random_sample['input']).to(self.device)
-        target_images = torch.stack(random_sample['target']).to(self.device)
+        input_images = torch.stack(random_sample['input'])
+        target_images = torch.stack(random_sample['target'])
         prompts = random_sample['prompt']
         
-        outputs = self.__call__(input_images, prompts, num_inference_steps)
+        output_images = self.__call__(input_images, prompts, num_inference_steps)
         
-        images = (outputs / 2 + 0.5).clamp(0, 1)
-        images = images.cpu()
+        output_images = (output_images * 0.5 + 0.5).clamp(0, 1).cpu()
         
-        input_images = (input_images / 2 + 0.5).clamp(0, 1)
-        input_images = input_images.cpu()
+        input_images = (input_images * 0.5 + 0.5).clamp(0, 1).cpu()
         
-        target_images = (target_images / 2 + 0.5).clamp(0, 1)
-        targets = target_images.cpu()
+        target_images = (target_images * 0.5  + 0.5).clamp(0, 1).cpu()
         
-        concat = torch.concat([input_images, images, targets],dim=0)
-        grid = make_grid(concat, nrow=images.shape[0])
+        concat = torch.concat([input_images, output_images, target_images])
+        grid = make_grid(concat, nrow=input_images.shape[0])
         img = torchvision.transforms.ToPILImage()(grid)
         if self.train_config.push_to_hub:
             print(f"Saving sample images to {self.train_config.output_dir} ...")
@@ -313,7 +311,9 @@ class DDPMNextTokenV1Pipeline():
                 accelerator.log(logs, step=global_step)
                 global_step += 1
                 wandb.log(logs)
-
+            
+            self.model_version = f"{self.train_id}_epoch_{epoch}"
+            
             # Evaluation loop
             with torch.no_grad():   
                 val_loss = 0.0
@@ -383,7 +383,49 @@ class DDPMNextTokenV1Pipeline():
             self.unet.save_pretrained(save_dir)
             print(f"Model saved to {save_dir} : {commit_message}.")
         
-    def load_model(self, model_dir):
+    def load_model_from_local_dir(self, model_dir: str):
         self.unet.from_pretrained(model_dir)
         self.unet.to(self.device) # type: ignore
-        print('Model Loaded')
+        self.model_version = model_dir.split('/')[-1]  # Assuming the model_dir is structured as 'output_dir/model_version'
+        print('Model Loaded with version: ', self.model_version)
+    
+    def load_model_from_hub(self, run: str, epoch: int) -> bool:
+        revision = None
+        try:
+            commits = [{'title':commit.title, 'id':commit.commit_id} 
+                       for commit in huggingface_hub.list_repo_commits(repo_id=self.train_config.hub_model_id,
+                                                                       revision=run) 
+                       if commit.title.startswith('Model saved at')]
+        except Exception as e:
+            print(f"Run {run} not found, check the run name and try again ...")
+            return False
+        for commit in commits:
+            if commit['title'] == f'Model saved at epoch {epoch}':
+                revision = commit['id']
+                break
+        if revision is None:
+            print(f"Run {run} does not have a commit for epoch {epoch}, check the run name and try again ...")
+            return False
+        try:
+            self.repo.git_checkout(revision=revision)
+        except Exception as e:
+            print(f"Failed to checkout revision {revision} for run {run}. Error: {e}")
+            return False
+        self.unet.from_pretrained(self.train_config.output_dir)
+        self.unet.to(self.device) # type: ignore
+        self.model_version = f"{run}_epoch_{epoch}"
+        print(f"Model loaded from version {self.model_version}.")
+        self.repo.git_checkout(revision='main')
+        return True
+        
+    def list_versions(self):
+        branches = huggingface_hub.list_repo_refs(repo_id=self.train_config.hub_model_id).branches
+        huggingface_hub.list_repo_commits(repo_id=self.train_config.hub_model_id)
+        versions = []
+        for branch in branches:
+            if branch.name.startswith('run_'):
+                commits = [commit.title for commit in huggingface_hub.list_repo_commits(repo_id=self.train_config.hub_model_id,
+                                                                                        revision=branch.name) 
+                           if commit.title.startswith('Model saved at')]
+                versions.append({'name': branch.name, 'commits': commits})
+        return versions
