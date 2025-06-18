@@ -203,14 +203,16 @@ class DDPMNextTokenV2Pipeline():
                 "image_size": self.train_config.image_size,
                 "num_epochs": self.train_config.num_epochs,
                 "train_batch_size": self.train_config.train_batch_size,
-                "train_size": train_size,
-                "val_size": val_size,
+                "training_steps": train_size,
+                "validation_steps": val_size,
                 "eval_batch_size": self.train_config.eval_batch_size,
                 "learning_rate": self.train_config.learning_rate,
                 "lr_warmup_steps": self.train_config.lr_warmup_steps,
-                "output_dir": self.train_config.output_dir,
-                "seed": self.train_config.seed,
-                "num_class_embeds": self.model_config.config['num_class_embeds']
+                "huggingface_repo_id": self.train_config.hub_model_id,
+                "num_class_embeds": self.model_config.config['num_class_embeds'],
+                "dataset_name": train_dataloader.dataset_name,
+                "train_split": train_dataloader.split,
+                "val_split": val_dataloader.split,
             }
         )
 

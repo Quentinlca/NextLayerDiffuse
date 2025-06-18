@@ -8,7 +8,8 @@ class ModularCharactersDataLoader(torch.utils.data.DataLoader):
         if not os.path.exists('cache/datasets'):
             os.makedirs('cache/datasets', exist_ok=True)
         dataset = load_dataset(dataset_name, split=split)
-
+        self.dataset_name = dataset_name
+        self.split = split
         vocab = dataset['prompt'] # type: ignore
         vocab = list(dict.fromkeys(dataset['prompt'])) # type: ignore
         vocab = sorted(vocab) # type: ignore
