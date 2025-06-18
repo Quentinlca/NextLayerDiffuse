@@ -193,6 +193,7 @@ class DDPMNextTokenV2Pipeline():
 
     def train(self, train_dataloader, val_dataloader, train_size = 1000, val_size = 100):
         self.train_id = f"run_{time.strftime('%Y-%m-%d_%H-%M-%S')}"
+        self.set_num_class_embeds(len(train_dataloader.vocab))
         
         # Initialize the wandb run
         wandb.init(
@@ -436,9 +437,11 @@ class DDPMNextTokenV2Pipeline():
                 versions.append({'name': branch.name, 'commits': commits})
         return versions
 
-    def set_class_vocabulary(self, class_vocabulary: list[str]):
+    def set_num_class_embeds(self, num_class_embeds: int):
         """
         Set the class vocabulary for the model.
         This is used to condition the model on specific classes.
         """
-        self.unet.config['num_class_embeds'] = len(class_vocabulary)
+        self.unet.config['num_class_embeds'] = num_class_embeds
+        self.model_config.config['num_class_embeds'] = num_class_embeds
+        
