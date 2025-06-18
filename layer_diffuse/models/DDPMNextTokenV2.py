@@ -155,9 +155,9 @@ class DDPMNextTokenV2Pipeline():
         
         input_images = torch.stack(random_sample['input'])
         target_images = torch.stack(random_sample['target'])
-        prompts = random_sample['prompt']
+        class_labels = torch.stack(random_sample['label'])
         
-        output_images = self.__call__(input_images, prompts, num_inference_steps)
+        output_images = self.__call__(input_images, class_labels, num_inference_steps)
         
         output_images = (output_images * 0.5 + 0.5).clamp(0, 1).cpu()
         
@@ -210,6 +210,7 @@ class DDPMNextTokenV2Pipeline():
                 "lr_warmup_steps": self.train_config.lr_warmup_steps,
                 "output_dir": self.train_config.output_dir,
                 "seed": self.train_config.seed,
+                "num_class_embeds": self.model_config.config['num_class_embeds']
             }
         )
 
@@ -218,7 +219,7 @@ class DDPMNextTokenV2Pipeline():
         lr_scheduler = get_cosine_schedule_with_warmup(
                                                         optimizer=optimizer,
                                                         num_warmup_steps=self.train_config.lr_warmup_steps,
-                                                        num_training_steps=(train_size * self.train_config.num_epochs),
+                                                        num_training_steps=(train_size * self.train_config.num_epochs // self.train_config.train_batch_size),
                                                     )
         
         # Initialize accelerator and tensorboard logging
@@ -283,7 +284,7 @@ class DDPMNextTokenV2Pipeline():
             for step, batch in enumerate(train_dataloader):
                 input_images = batch["input"].to(self.device)
                 target_images = batch["target"].to(self.device)
-                prompts = batch['prompt']
+                class_labels = batch['label'].to(self.device)  
                 # Sample noise to add to the images
                 noise = torch.randn(target_images.shape, device=self.device)
                 bs = target_images.shape[0]
@@ -300,9 +301,9 @@ class DDPMNextTokenV2Pipeline():
                 with accelerator.accumulate(self.unet):
                     # Predict the noise residual
                     noisy_samples = torch.concat([input_images, noisy_targets], dim=1)
-                    noise_pred = self.unet(sample=noisy_samples, 
-                                           timestep=timesteps, 
-                                           encoder_hidden_states=torch.zeros([noisy_samples.shape[0],32,1280]).to(self.device)).sample
+                    noise_pred = self.unet.forward(sample=noisy_samples,
+                                           timestep=timesteps,
+                                           class_labels=class_labels).sample
                     loss = F.mse_loss(noise_pred, noise)
                     accelerator.backward(loss)
 
@@ -326,9 +327,9 @@ class DDPMNextTokenV2Pipeline():
                 val_loss = 0.0
                 self.unet.eval()
                 for batch in tqdm(val_dataloader, desc="Evaluating"):
-                    input_images = batch["input"].to(self.device)
-                    target_images = batch["target"].to(self.device)
-                    prompts = batch['prompt']
+                    input_images = batch['input'].to(self.device)
+                    target_images = batch['target'].to(self.device)
+                    class_labels = batch['label'].to(self.device) 
                     
                     # Sample noise to add to the images
                     noise = torch.randn(target_images.shape, device=self.device)
@@ -344,9 +345,9 @@ class DDPMNextTokenV2Pipeline():
                     noisy_targets = self.scheduler.add_noise(target_images, noise, timesteps) # type: ignore
                     # Predict the noise residual
                     noisy_samples = torch.concat([input_images, noisy_targets], dim=1)
-                    noise_pred = self.unet(sample=noisy_samples,
-                                            timestep=timesteps,
-                                            encoder_hidden_states=torch.zeros([noisy_samples.shape[0],32,1280]).to(self.device)).sample
+                    noise_pred = self.unet.forward(sample=noisy_samples,
+                                           timestep=timesteps,
+                                           class_labels=class_labels).sample
                     loss = F.mse_loss(noise_pred, noise)
                     val_loss += loss.item()
                 val_loss /= len(val_dataloader)
