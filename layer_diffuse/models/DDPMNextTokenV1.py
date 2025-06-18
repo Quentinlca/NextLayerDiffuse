@@ -80,9 +80,6 @@ class ModelConfig(dict):
         )
         self.config['block_out_channels'] = (128, 128, 256, 256, 512, 512)
         self.config['layers_per_block']=2
-        # self.config['addition_embed_type'] = 'text'
-        # self.config['class_embed_type'] = 'identity'
-        # self.config['class_embeddings_concat'] = False
         
 class SchedulerConfig(dict):
     def __init__(self) -> None:
