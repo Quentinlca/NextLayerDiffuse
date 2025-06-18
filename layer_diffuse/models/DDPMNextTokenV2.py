@@ -11,6 +11,7 @@ from diffusers.optimization import get_cosine_schedule_with_warmup
 
 from accelerate import notebook_launcher
 
+from diffusers.models.unets.unet_2d import UNet2DModel
  
 from diffusers.models.unets.unet_2d_condition import UNet2DConditionModel
 from diffusers.schedulers.scheduling_ddpm import DDPMScheduler
@@ -79,10 +80,9 @@ class ModelConfig(dict):
             "UpBlock2D",
         )
         self.config['block_out_channels'] = (128, 128, 256, 256, 512, 512)
-        self.config['layers_per_block']=2
-        self.config['addition_embed_type'] = 'text'
-        # self.config['class_embed_type'] = 'identity'
-        # self.config['class_embeddings_concat'] = False
+        self.config['layers_per_block']= 2
+        self.config['class_embed_type'] = 'identity'
+        self.config['num_class_embeds'] = 0  # Number of class embeddings, set to 0 for no class conditioning
         
 class SchedulerConfig(dict):
     def __init__(self) -> None:
@@ -93,14 +93,14 @@ class SchedulerConfig(dict):
 class DDPMNextTokenV2Pipeline():
     def __init__(self):
         # Initialize the training and model configurations
+        self.device = torch.device('cuda') if torch.cuda.is_available() else torch.device('cpu')
         self.train_id = ''
         self.model_version = ''
         self.train_config = TrainingConfig()
         self.model_config = ModelConfig()
         self.scheduler_config = SchedulerConfig()
-        self.unet = UNet2DConditionModel(**self.model_config.config)
+        self.unet = UNet2DModel(**self.model_config.config).to(self.device) # type: ignore
         self.scheduler=DDPMScheduler(**self.scheduler_config.config)
-        self.device = torch.device('cuda') if torch.cuda.is_available() else torch.device('cpu')
         wandb.login(key=os.environ.get("WANDB_API_KEY"))  # Ensure you have your WANDB_API_KEY set in your environment
         huggingface_hub.login(token=os.environ.get("HUGGINGFACE_HUB_TOKEN"), new_session=False)  # Ensure you have your HUGGINGFACE_HUB_TOKEN set in your environment
         
@@ -117,8 +117,12 @@ class DDPMNextTokenV2Pipeline():
         self.repo.git_checkout(revision='main', create_branch_ok=True)  # Checkout the main branch
         self.repo.git_pull(rebase=True)  # Pull the latest changes from the hub
         
+        print("Pipeline initialized on device : ", self.device)
+        
     @torch.no_grad()
-    def __call__(self, input_images: torch.Tensor, prompts: list[str], num_inference_steps: int = 50):
+    def __call__(self, input_images: torch.Tensor, class_labels: torch.Tensor, num_inference_steps: int = 50):
+        assert self.model_config.config['num_class_embeds'] != 0, "Class embeddings are not set. Please set the class vocabulary using set_class_vocabulary() method."
+        
         self.unet.eval()
 
         xt = torch.randn((input_images.shape[0],
@@ -127,15 +131,17 @@ class DDPMNextTokenV2Pipeline():
                           self.train_config.image_size)
                          ).to(self.device)
         input_images = input_images.to(self.device)
-        
+        class_labels = class_labels.to(self.device)
         self.scheduler.set_timesteps(num_inference_steps)
         
         for t in tqdm(self.scheduler.timesteps.numpy()):
             # Get prediction of noise
             noisy_samples = torch.concat([input_images, xt], dim=1).to(self.device)
-            noise_pred = self.unet(sample=noisy_samples, 
-                                   timestep=t,
-                                   encoder_hidden_states=torch.zeros([noisy_samples.shape[0],32,1280]).to(self.device)).sample
+            time_step = torch.as_tensor(t, device=self.device)
+            
+            noise_pred = self.unet.forward(sample=noisy_samples,
+                                           timestep=time_step,
+                                           class_labels=class_labels).sample # type: ignore
             
             # Use scheduler to get x0 and xt-1
             xt = self.scheduler.step(noise_pred, t, xt, return_dict=False)[0]
