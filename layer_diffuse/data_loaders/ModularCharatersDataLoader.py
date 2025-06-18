@@ -9,6 +9,11 @@ class ModularCharactersDataLoader(torch.utils.data.DataLoader):
             os.makedirs('cache/datasets', exist_ok=True)
         dataset = load_dataset(dataset_name, split=split)
 
+        vocab = dataset['prompt'] # type: ignore
+        vocab = list(dict.fromkeys(dataset['prompt'])) # type: ignore
+        vocab = sorted(vocab) # type: ignore
+        self.vocab = dict(zip(vocab, range(len(vocab))))
+        
         preprocess = transforms.Compose(
                 [
                     transforms.Resize((image_size, image_size)),
@@ -21,9 +26,10 @@ class ModularCharactersDataLoader(torch.utils.data.DataLoader):
         def transform(rows:dict)->dict:
             images_input = [preprocess(image) for image in rows['input']]
             images_target = [preprocess(image) for image in rows['target']]
+            class_labels = [torch.tensor(self.vocab.get(prompt,-1),dtype=torch.long).unsqueeze(0) for prompt in rows['prompt']]
             return {'input': images_input,
                     'target': images_target,
-                    'prompt': rows['prompt']}
+                    'labels': class_labels}
         dataset.set_transform(transform) # type: ignore
         
         return super().__init__(dataset,  # type: ignore
