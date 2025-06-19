@@ -136,7 +136,7 @@ class DDPMNextTokenV2Pipeline():
         class_labels = class_labels.to(self.device)
         self.scheduler.set_timesteps(num_inference_steps)
         
-        for t in tqdm(self.scheduler.timesteps.numpy(), desc="Inference"):
+        for t in tqdm(self.scheduler.timesteps.numpy(), desc="Inference", unit="step"):
             # Get prediction of noise
             noisy_samples = torch.concat([input_images, xt], dim=1).to(self.device)
             time_step = torch.as_tensor(t, device=self.device)
@@ -282,7 +282,7 @@ class DDPMNextTokenV2Pipeline():
                 )
             
             # Training loop
-            progress_bar = tqdm(total=len(train_dataloader), disable=not accelerator.is_local_main_process)
+            progress_bar = tqdm(total=len(train_dataloader), disable=not accelerator.is_local_main_process, unit="batch")
             progress_bar.set_description(f"Epoch {epoch}")
             self.unet.train()
             for step, batch in enumerate(train_dataloader):
@@ -330,7 +330,7 @@ class DDPMNextTokenV2Pipeline():
             with torch.no_grad():   
                 val_loss = 0.0
                 self.unet.eval()
-                for batch in tqdm(val_dataloader, desc="Evaluating"):
+                for batch in tqdm(val_dataloader, desc="Evaluating", unit="batch"):
                     input_images = batch['input'].to(self.device)
                     target_images = batch['target'].to(self.device)
                     class_labels = batch['label'].to(self.device) 
@@ -460,7 +460,7 @@ class DDPMNextTokenV2Pipeline():
         fid_metric = FrechetInceptionDistance(feature=2048, normalize=True).to(self.device)
 
         # Loop through the dataloader and accumulate FID statistics
-        for batch in tqdm(dataloader, desc="Calculating FID score"):
+        for batch in tqdm(dataloader, desc="Calculating FID score", unit="batch"):
             input_images = batch['input']
             target_images = batch['target'].to(self.device)
             labels = batch['label']
