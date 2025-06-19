@@ -48,14 +48,14 @@ class TrainingConfig:
     learning_rate = 1e-4
     lr_warmup_steps = 500
     save_image_epochs = 1
-    save_model_epochs = 1
+    save_model_epochs = 3
     mixed_precision = "fp16"  # `no` for float32, `fp16` for automatic mixed precision
     output_dir = "training_outputs/DDPMNextTokenV2"  # the model name locally and on the HF Hub
     backup_output_dir = "training_outputs/DDPMNextTokenV2_backup"  # the model name locally and on the HF Hub if push_to_hub fails
     push_to_hub = True  # whether to upload the saved model to the HF Hub
     hub_model_id = "QLeca/DDPMNextTokenV2"  # the name of the repository to create on the HF Hub
-    seed = 0
     wandb_project_name = "ddpm-next-token-v2"  # the name of the project on Weights & Biases
+    seed = 0
 
 class ModelConfig(dict):
     def __init__(self) -> None:
