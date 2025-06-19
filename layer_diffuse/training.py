@@ -12,6 +12,7 @@ def train_loop():
     parser.add_argument('--val_size', type=int, default=1600, help='Number of validation batches')
     parser.add_argument('--batch_size', type=int, default=16, help='Batch size for training and validation')
     parser.add_argument('--dataset_name', type=str, default="QLeca/modular_characters_small", help='Dataset name to use for training')
+    parser.add_argument('--num_epochs', type=int, default=50, help='Training epochs')
     
     args = parser.parse_args()
     # get the training and validation sizes from the command line arguments
@@ -19,12 +20,15 @@ def train_loop():
     val_size = args.val_size
     batch_size = args.batch_size
     dataset_name = args.dataset_name
+    num_epochs = args.num_epochs
     
     # Initialize the DDPMNextTokenV1 pipeline
     pipeline = DDPMNextTokenV2.DDPMNextTokenV2Pipeline()
     # Configure the training parameters (TODO: make this configurable)
     pipeline.train_config.train_batch_size = batch_size
     pipeline.train_config.eval_batch_size = batch_size
+    pipeline.train_config.num_epochs = num_epochs
+    
     # Get the dataloaders for training and validation
     train_dataloader = ModularCharatersDataLoader.get_modular_char_dataloader(dataset_name=dataset_name,
                                                                             split=train_split,
