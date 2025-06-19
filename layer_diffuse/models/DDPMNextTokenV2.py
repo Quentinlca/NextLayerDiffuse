@@ -34,7 +34,6 @@ from typing import Tuple
 import wandb
 import wandb.util
 import time
-
 from torchmetrics.image.fid import FrechetInceptionDistance
 
 IMAGE_SIZE = 128
@@ -505,8 +504,9 @@ class DDPMNextTokenV2Pipeline():
         existing_stats.update(stats)
         with open(stats_path, 'w') as f:
             json.dump(existing_stats, f, indent=4)
-            
-        response = self.repo.push_to_hub(commit_message='Saved training statistics for model version {run}_epoch_{epoch}..',)
+        
+        commit_message='Saved training statistics for model version {run}_epoch_{epoch}..'
+        response = self.repo.push_to_hub(commit_message=commit_message,)
         if response is not None:
             print(f"Model saved to {self.train_config.hub_model_id} : {commit_message}.")
             return True
