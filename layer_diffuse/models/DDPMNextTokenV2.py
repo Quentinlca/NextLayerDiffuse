@@ -35,6 +35,8 @@ import wandb
 import wandb.util
 import time
 
+from torchmetrics.image.fid import FrechetInceptionDistance
+
 IMAGE_SIZE = 128
 
 @dataclass
@@ -450,4 +452,65 @@ class DDPMNextTokenV2Pipeline():
         """
         self.unet.config['num_class_embeds'] = num_class_embeds
         self.model_config.config['num_class_embeds'] = num_class_embeds
+        
+    def get_FID_score(self, dataloader, num_inference_steps: int = 1000):
+        """
+        Compute the FID score of the model on the given dataloader.
+        """
+        # Initialize FID metric
+        fid_metric = FrechetInceptionDistance(feature=2048, normalize=True).to(self.device)
+
+        # Loop through the dataloader and accumulate FID statistics
+        for batch in tqdm(dataloader):
+            input_images = batch['input']
+            target_images = batch['target'].to(self.device)
+            labels = batch['label']
+            with torch.no_grad():
+                outputs = self.__call__(input_images=input_images, 
+                                        class_labels=labels,
+                                        num_inference_steps=num_inference_steps)
+                # Rescale to [0, 1]
+                fake_images = (outputs * 0.5 + 0.5).clamp(0, 1)
+                real_images = (target_images * 0.5 + 0.5).clamp(0, 1)
+                # Convert RGBA to RGB by compositing over a white background
+                def rgba_to_rgb(img):
+                    if img.shape[1] == 4:
+                        rgb = img[:, :3, :, :]
+                        alpha = img[:, 3:4, :, :]
+                        white = torch.ones_like(rgb)
+                        rgb = rgb * alpha + white * (1 - alpha)
+                        return rgb
+                    return img
+
+                fake_images = rgba_to_rgb(fake_images)
+                real_images = rgba_to_rgb(real_images)
+                
+                # FID expects float32 and shape [N, 3, H, W]
+                fid_metric.update(fake_images.float(), real=False)
+                fid_metric.update(real_images.float(), real=True)
+
+        return fid_metric.compute().item()
+    
+    def save_stats(self, stats: dict, run:str, epoch:int) -> bool:
+        """
+        Save the training statistics to a JSON file.
+        """
+        
+        self.repo.git_checkout(revision='main')
+        stats_path = os.path.join(self.train_config.output_dir, 'stats.json')
+        existing_stats = {}
+        if os.path.exists(stats_path):
+            with open(stats_path, 'r') as f:
+                existing_stats = json.load(f)
+        existing_stats.update(stats)
+        with open(stats_path, 'w') as f:
+            json.dump(existing_stats, f, indent=4)
+            
+        response = self.repo.push_to_hub(commit_message='Saved training statistics for model version {run}_epoch_{epoch}..',)
+        if response is not None:
+            print(f"Model saved to {self.train_config.hub_model_id} : {commit_message}.")
+            return True
+        else:
+            return False
+            
         
