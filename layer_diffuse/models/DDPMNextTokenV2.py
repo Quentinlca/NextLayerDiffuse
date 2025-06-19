@@ -150,7 +150,7 @@ class DDPMNextTokenV2Pipeline():
         return xt
             
     @torch.no_grad()
-    def save_training_samples(self, dataloader, epoch:int, generator: torch.Generator | None = None, num_inference_steps: int = 50) -> str:
+    def save_training_samples(self, dataloader, epoch:int, generator: torch.Generator | None = None, num_inference_steps: int = 1000) -> str:
         random_sample_idx = torch.randint(0, len(dataloader.dataset), (self.train_config.sample_size,), device=self.device, generator=generator) # type: ignore
         random_sample = dataloader.dataset[random_sample_idx]
         
@@ -364,7 +364,7 @@ class DDPMNextTokenV2Pipeline():
             if accelerator.is_main_process:
                 # Saving the images
                 if (epoch + 1) % self.train_config.save_image_epochs == 0 or epoch == self.train_config.num_epochs - 1:
-                    image_path = self.save_training_samples(dataloader=val_dataloader, epoch=epoch, generator=random_generator, num_inference_steps=50)
+                    image_path = self.save_training_samples(dataloader=val_dataloader, epoch=epoch, generator=random_generator, num_inference_steps=1000)
                     wandb.log({"sample_images": wandb.Image(image_path, caption=f"Epoch {epoch} samples"), 'epoch': epoch})
                 # Saving the images
                 if (epoch + 1) % self.train_config.save_model_epochs == 0 or epoch == self.train_config.num_epochs - 1:
