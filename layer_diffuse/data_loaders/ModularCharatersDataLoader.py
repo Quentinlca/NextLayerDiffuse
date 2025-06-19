@@ -18,7 +18,7 @@ class ModularCharactersDataLoader(torch.utils.data.DataLoader):
         preprocess = transforms.Compose(
                 [
                     transforms.Resize((image_size, image_size)),
-                    transforms.RandomHorizontalFlip(),
+                    # transforms.RandomHorizontalFlip(),
                     transforms.ToTensor(),
                     transforms.Normalize([0.5], [0.5]),
                 ]
