@@ -101,6 +101,7 @@ class DDPMNextTokenV2Pipeline():
         self.scheduler_config = SchedulerConfig()
         self.unet = UNet2DModel(**self.model_config.config).to(self.device) # type: ignore
         self.scheduler=DDPMScheduler(**self.scheduler_config.config)
+        
         wandb.login(key=os.environ.get("WANDB_API_KEY"))  # Ensure you have your WANDB_API_KEY set in your environment
         huggingface_hub.login(token=os.environ.get("HUGGINGFACE_HUB_TOKEN"), new_session=False)  # Ensure you have your HUGGINGFACE_HUB_TOKEN set in your environment
         
@@ -120,7 +121,7 @@ class DDPMNextTokenV2Pipeline():
         print("Pipeline initialized on device : ", self.device)
         
     @torch.no_grad()
-    def __call__(self, input_images: torch.Tensor, class_labels: torch.Tensor, num_inference_steps: int = 50):
+    def __call__(self, input_images: torch.Tensor, class_labels: torch.Tensor, num_inference_steps: int = 1000):
         assert self.model_config.config['num_class_embeds'] != 0, "Class embeddings are not set. Please set the class vocabulary using set_class_vocabulary() method."
         
         self.unet.eval()
