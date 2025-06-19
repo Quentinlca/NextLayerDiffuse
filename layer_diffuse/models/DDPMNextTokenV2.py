@@ -395,7 +395,8 @@ class DDPMNextTokenV2Pipeline():
             print(f"Model saved to {save_dir} : {commit_message}.")
         
     def load_model_from_local_dir(self, model_dir: str):
-        self.unet.from_pretrained(model_dir)
+        self.unet = UNet2DModel.from_pretrained(self.train_config.output_dir)
+        self.model_config.config = self.unet.config 
         self.unet.to(self.device) # type: ignore
         self.model_version = model_dir.split('/')[-1]  # Assuming the model_dir is structured as 'output_dir/model_version'
         print('Model Loaded with version: ', self.model_version)
@@ -422,7 +423,8 @@ class DDPMNextTokenV2Pipeline():
         except Exception as e:
             print(f"Failed to checkout revision {revision} for run {run}. Error: {e}")
             return False
-        self.unet.from_pretrained(self.train_config.output_dir)
+        self.unet = UNet2DModel.from_pretrained(self.train_config.output_dir)
+        self.model_config.config = self.unet.config 
         self.unet.to(self.device) # type: ignore
         self.model_version = f"{run}_epoch_{epoch}"
         print(f"Model loaded from version {self.model_version}.")
