@@ -42,7 +42,7 @@ def eval_loop():
                                    'epoch': epoch,
                                    'dataset_name': dataset_name,
                                    'split': split,
-                                   'dataset_size': len(dataloader.dataset),
+                                   'dataset_size': len(dataloader)* batch_size,
                                    'num_inference_steps': num_inference_steps,
                                    'FID_score': FID_score}}
             if pipeline.save_stats(stats=stats, run=run_name, epoch=epoch):

@@ -136,7 +136,7 @@ class DDPMNextTokenV2Pipeline():
         class_labels = class_labels.to(self.device)
         self.scheduler.set_timesteps(num_inference_steps)
         
-        for t in tqdm(self.scheduler.timesteps.numpy()):
+        for t in tqdm(self.scheduler.timesteps.numpy(), desc="Inference"):
             # Get prediction of noise
             noisy_samples = torch.concat([input_images, xt], dim=1).to(self.device)
             time_step = torch.as_tensor(t, device=self.device)
@@ -460,7 +460,7 @@ class DDPMNextTokenV2Pipeline():
         fid_metric = FrechetInceptionDistance(feature=2048, normalize=True).to(self.device)
 
         # Loop through the dataloader and accumulate FID statistics
-        for batch in tqdm(dataloader):
+        for batch in tqdm(dataloader, desc="Calculating FID score"):
             input_images = batch['input']
             target_images = batch['target'].to(self.device)
             labels = batch['label']
