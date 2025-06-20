@@ -144,7 +144,7 @@ class NextTokenGenerator:
         return output_paths
 
     @staticmethod
-    def upload_dataset(dataset_path:str, repo_id:str):
+    def upload_dataset(dataset_path:str, repo_id:str, shuffle:bool=True):
         from datasets import Dataset
         from datasets import Features, Value, Image as HFImage
         
@@ -169,6 +169,8 @@ class NextTokenGenerator:
                 yield row
         
         df = pd.read_csv(dataset_path)
+        if shuffle:
+            df = df.sample(frac=1).reset_index(drop=True)
         inputs = df['Input'].to_list()
         targets = df['Target'].to_list()
         prompts = df['Prompt'].to_list()
