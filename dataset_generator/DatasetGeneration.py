@@ -7,6 +7,6 @@ if __name__ == '__main__':
                                     output_image_size=128,
                                     save_size=500)
     
-    TokenGenerator.generate('characters.json',
+    TokenGenerator.generate_hair_sequence('characters.json',
                        resume=False)
     

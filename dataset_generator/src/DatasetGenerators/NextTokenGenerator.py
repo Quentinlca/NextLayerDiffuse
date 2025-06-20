@@ -74,20 +74,13 @@ class NextTokenGenerator:
         
         rows = [] 
         last_char_generated = 0
-        
-        # Create the blank image
-        blank_image_name = f"char_{'0'*FILE_NUMBER_LENGHT}-layer_0.png"
-        blank_image_path = f'{self.images_output_dir}/0/{blank_image_name}'
-        if not os.path.exists(os.path.dirname(blank_image_path)):
-            os.makedirs(os.path.dirname(blank_image_path))
-        Image.new('RGBA', (self.image_size, self.image_size), (255, 255, 255, 0)).save(blank_image_path)
 
         if resume:
             target = pd.read_csv(self.dataset_path)['Target'].to_list()
             last_char_generated = int(os.path.basename(target[-1]).split('-')[0].split('_')[1])
             print(f"Resuming to character number {last_char_generated} ...")
 
-        for char_id, character in tqdm(enumerate(dataset, start = last_char_generated), initial=last_char_generated, desc="Generating sequence", total=len(dataset),miniters=10):  
+        for char_id, character in tqdm(enumerate(dataset, start = last_char_generated), initial=last_char_generated, desc="Generating sequence", total=len(dataset), miniters=10, unit='char'):  
             sub_dir_input_number = (char_id*2)//MAX_FILES_PER_DIR
             sub_dir_target_number = (char_id*2+1)//MAX_FILES_PER_DIR
             

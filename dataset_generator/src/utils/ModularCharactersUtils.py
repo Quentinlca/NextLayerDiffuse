@@ -320,6 +320,7 @@ def merge_composents(modules_paths: list[str], output_path:str|None=None, save=F
 
 def add_component(base_image:Image.Image, component_path:str, output_path:str, output_image_size:int=128) -> Image.Image:    
     component_image = Image.open(component_path)
+    blank = Image.new('RGBA', (IMAGE_SIZE, IMAGE_SIZE), (0, 0, 0, 0))
     
     class_name = component_path.split('/')[-2]
     special_type = os.path.basename(component_path).split('.')[0].split('_')[-1]
@@ -327,13 +328,14 @@ def add_component(base_image:Image.Image, component_path:str, output_path:str, o
     class_offsets = MODULES_OFFSETS.get(class_name, {'standard':(0, 0)})
     x_offset, y_offset = class_offsets.get(special_type, class_offsets['standard'])
     
-    base_image.alpha_composite(component_image, (x_offset, y_offset))
+    blank.alpha_composite(component_image, (x_offset, y_offset))
 
-    im_to_save = base_image.resize((output_image_size, output_image_size))
+    component_image = blank.resize((output_image_size, output_image_size))
+    result_image = Image.alpha_composite(base_image, component_image)
     if not os.path.exists(os.path.dirname(output_path)):
         os.makedirs(os.path.dirname(output_path))
-    im_to_save.save(output_path)
-    return base_image
+    result_image.save(output_path)
+    return result_image
 
 
 def generate_sequence(sequence_paths:list[str], blank_path:str, output_paths:list[str], output_image_size=128) -> list[list[str]]:
