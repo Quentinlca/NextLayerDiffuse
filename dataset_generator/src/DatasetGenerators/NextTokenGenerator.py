@@ -67,6 +67,68 @@ class NextTokenGenerator:
         df_batch.to_csv(self.dataset_path,index=False) 
         rows = []
     
+    def generate_hair_sequence(self, sequence_dataset_path:str, resume:bool=True):
+        # Load the path sequence dataset
+        dataset = json.load(open(sequence_dataset_path,mode='r'))
+        print(f'Loaded dataset with {len(dataset)} sequences of {len(dataset[0])} modules ...')
+        
+        rows = [] 
+        last_char_generated = 0
+        
+        # Create the blank image
+        blank_image_name = f"char_{'0'*FILE_NUMBER_LENGHT}-layer_0.png"
+        blank_image_path = f'{self.images_output_dir}/0/{blank_image_name}'
+        if not os.path.exists(os.path.dirname(blank_image_path)):
+            os.makedirs(os.path.dirname(blank_image_path))
+        Image.new('RGBA', (self.image_size, self.image_size), (255, 255, 255, 0)).save(blank_image_path)
+
+        if resume:
+            target = pd.read_csv(self.dataset_path)['Target'].to_list()
+            last_char_generated = int(os.path.basename(target[-1]).split('-')[0].split('_')[1])
+            print(f"Resuming to character number {last_char_generated} ...")
+
+        for char_id, character in tqdm(enumerate(dataset, start = last_char_generated), initial=last_char_generated, desc="Generating sequence", total=len(dataset),miniters=10):  
+            sub_dir_input_number = (char_id*2)//MAX_FILES_PER_DIR
+            sub_dir_target_number = (char_id*2+1)//MAX_FILES_PER_DIR
+            
+            input_image_number = '0'*(FILE_NUMBER_LENGHT-len(str(char_id+1)))+str(char_id+1)
+            
+            input_image_name = f'char_{input_image_number}_input.png'
+            target_image_name = f'char_{input_image_number}_target.png'
+            
+            output_path_input = f'{self.images_output_dir}/{sub_dir_input_number}/{input_image_name}'
+            output_path_target = f'{self.images_output_dir}/{sub_dir_target_number}/{target_image_name}'
+            
+            input_image, _ = merge_composents(character[:-1],
+                                           output_path=output_path_input, 
+                                           save=True, 
+                                           output_size=self.image_size)
+            
+            target_image = add_component(base_image=input_image,
+                                           component_path=character[-1], 
+                                           output_path=output_path_target, 
+                                           output_image_size=self.image_size)
+            
+            prompt = get_class_from_path(character[-1])
+            
+            rows.append([output_path_input, output_path_target, prompt])
+            if char_id%self.save_size == 0:
+                print(f'Saving the dataset ({char_id}/{len(dataset)})')
+                df_batch = pd.DataFrame(rows, columns=['Input', 'Target', 'Prompt'])
+                if char_id > 0:
+                    existing_df = pd.read_csv(self.dataset_path)
+                    df_batch = pd.concat([existing_df,df_batch], ignore_index=True)
+                df_batch.to_csv(self.dataset_path,index=False) 
+                rows = []
+                
+        print(f'Saving the dataset (COMPLETE)')
+        df_batch = pd.DataFrame(rows, columns=['Input', 'Target', 'Prompt'])
+        existing_df = pd.read_csv(self.dataset_path)
+        df_batch = pd.concat([existing_df,df_batch], ignore_index=True)
+        df_batch.to_csv(self.dataset_path,index=False) 
+        rows = []
+        
+    
     @staticmethod
     def get_output_path(char_id:int, layer_id:int, sequence_lenght:int, output_dir:str)->str:
         file_number = (char_id)*sequence_lenght + layer_id + 1
