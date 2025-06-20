@@ -497,11 +497,11 @@ class DDPMNextTokenV2Pipeline():
         
         self.repo.git_checkout(revision='main')
         stats_path = os.path.join(self.train_config.output_dir, 'stats.json')
-        existing_stats = {}
+        existing_stats = []
         if os.path.exists(stats_path):
             with open(stats_path, 'r') as f:
                 existing_stats = json.load(f)
-        existing_stats.update(stats)
+        existing_stats.append(stats)
         with open(stats_path, 'w') as f:
             json.dump(existing_stats, f, indent=4)
         
