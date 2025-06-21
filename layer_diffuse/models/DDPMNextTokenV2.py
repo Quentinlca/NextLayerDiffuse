@@ -47,7 +47,7 @@ class TrainingConfig:
     num_epochs = 50
     gradient_accumulation_steps = 1
     learning_rate = 1e-4
-    lr_warmup_steps = 500
+    lr_warmup_steps = 100
     save_image_epochs = 1
     save_model_epochs = 3
     mixed_precision = "fp16"  # `no` for float32, `fp16` for automatic mixed precision
