@@ -13,7 +13,7 @@ def train_loop():
     parser.add_argument('--batch_size', type=int, default=16, help='Batch size for training and validation')
     parser.add_argument('--dataset_name', type=str, default="QLeca/modular_characters_small", help='Dataset name to use for training')
     parser.add_argument('--num_epochs', type=int, default=50, help='Training epochs')
-    parser.add_argument('--lr', type=int, default=0.0001, help='Learning rate')
+    parser.add_argument('--lr', type=float, default=0.0001, help='Learning rate')
     
     args = parser.parse_args()
     # get the training and validation sizes from the command line arguments
