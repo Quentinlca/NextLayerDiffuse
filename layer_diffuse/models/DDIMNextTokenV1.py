@@ -95,7 +95,7 @@ class SchedulerConfig(dict):
         self.config = {}
         self.config['num_train_timesteps'] = 1000
 
-class DDPINextTokenV1Pipeline():
+class DDIMNextTokenV1Pipeline():
     def __init__(self):
         # Initialize the training and model configurations
         self.device = torch.device('cuda') if torch.cuda.is_available() else torch.device('cpu')
