@@ -280,7 +280,7 @@ def get_class_from_path(path:str)->str:
     return basename
 
 
-def merge_composents(modules_paths: list[str], output_path:str|None=None, save=False, output_size = None) -> Tuple[Image.Image, bool]:    
+def merge_composents(modules_paths: list[str], output_path:str|None=None, save=False, output_size = None, background:bool=True) -> Tuple[Image.Image, bool]:    
     save = save and bool(output_path)
     # TODO : remove this part by preprocessing the dataset : 
     modules_paths = sort_paths_by_order(modules_paths)
@@ -306,9 +306,13 @@ def merge_composents(modules_paths: list[str], output_path:str|None=None, save=F
             continue
         merged_image.alpha_composite(img, (x_offset, y_offset))
     # Save the merged image
-    
     if output_size != None:
         merged_image = merged_image.resize((output_size,output_size))
+    if background:
+        # Convert RGBA to RGB with white background
+        rgb_image = Image.new('RGB', merged_image.size, (255, 255, 255))
+        rgb_image.paste(merged_image, mask=merged_image.split()[3])  # Use alpha channel as mask
+        merged_image = rgb_image
     if save and output_path:
         try:
             merged_image.save(output_path)
@@ -318,7 +322,7 @@ def merge_composents(modules_paths: list[str], output_path:str|None=None, save=F
     return merged_image, save
 
 
-def add_component(base_image:Image.Image, component_path:str, output_path:str, output_image_size:int=128) -> Image.Image:    
+def add_component(base_image:Image.Image, component_path:str, output_path:str, output_image_size:int=128, background:bool=True) -> Image.Image:    
     component_image = Image.open(component_path)
     blank = Image.new('RGBA', (IMAGE_SIZE, IMAGE_SIZE), (0, 0, 0, 0))
     
@@ -334,6 +338,11 @@ def add_component(base_image:Image.Image, component_path:str, output_path:str, o
     result_image = Image.alpha_composite(base_image, component_image)
     if not os.path.exists(os.path.dirname(output_path)):
         os.makedirs(os.path.dirname(output_path))
+    if background:
+        # Convert RGBA to RGB with white background
+        rgb_image = Image.new('RGB', result_image.size, (255, 255, 255))
+        rgb_image.paste(result_image, mask=result_image.split()[3])  # Use alpha channel as mask
+        result_image = rgb_image
     result_image.save(output_path)
     return result_image
 
