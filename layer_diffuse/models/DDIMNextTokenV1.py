@@ -91,7 +91,7 @@ class SchedulerConfig(dict):
     def __init__(self) -> None:
         super().__init__()
         self.config = {}
-        self.config['num_train_timesteps'] = 1000,
+        self.config['num_train_timesteps'] = 1000
         self.config['beta_start'] = 0.0001
         self.config['beta_end'] = 0.02
         self.config['beta_schedule'] = 'squaredcos_cap_v2'
