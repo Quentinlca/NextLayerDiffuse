@@ -13,6 +13,13 @@ def train_loop():
     train_split = f"train"
     parser = argparse.ArgumentParser(description="Train DDIMNextTokenV1 model.")
     parser.add_argument(
+        "--model_version",
+        type=str,
+        default="DDIMNextTokenV1",
+        choices=["DDPMNextTokenV1", "DDPMNextTokenV2", "DDPMNextTokenV3", "DDIMNextTokenV1"],
+        help="Model version to use for training",
+    )
+    parser.add_argument(
         "--train_size", type=int, default=16000, help="Number of training batches"
     )
     parser.add_argument(
@@ -50,7 +57,14 @@ def train_loop():
     warming_steps = args.warming_steps
 
     # Initialize the DDPMNextTokenV1 pipeline
-    pipeline = DDIMNextTokenV1.DDIMNextTokenV1Pipeline()
+    if args.model_version == "DDPMNextTokenV1":
+        pipeline = DDPMNextTokenV1.DDPMNextTokenV1Pipeline()
+    elif args.model_version == "DDPMNextTokenV2":
+        pipeline = DDPMNextTokenV2.DDPMNextTokenV2Pipeline()
+    elif args.model_version == "DDPMNextTokenV3":
+        pipeline = DDPMNextTokenV3.DDPMNextTokenV3Pipeline()
+    else:
+        pipeline = DDIMNextTokenV1.DDIMNextTokenV1Pipeline()
     # Configure the training parameters (TODO: make this configurable)
     pipeline.train_config.train_batch_size = batch_size
     pipeline.train_config.eval_batch_size = batch_size
