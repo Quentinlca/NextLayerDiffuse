@@ -1,10 +1,16 @@
-from models import DDPMNextTokenV1
-from models import DDPMNextTokenV2
+from models import *
 from data_loaders import ModularCharatersDataLoader
 import argparse
 
 def eval_loop():
     parser = argparse.ArgumentParser(description="Train DDPMNextTokenV2 model.")
+    parser.add_argument(
+        "--model_version",
+        type=str,
+        default="DDIMNextTokenV1",
+        choices=["DDPMNextTokenV2", "DDPMNextTokenV3", "DDIMNextTokenV1"],
+        help="Model version to use for training",
+    )
     parser.add_argument('--batch_size', type=int, default=16, help='Batch size for training and validation')
     parser.add_argument('--dataset_name', type=str, default="QLeca/modular_characters_small", help='Dataset name to use for training')
     parser.add_argument('--run_name', type=str, default='run_2025-06-19_14-12-46', help='Run name for loading the model')
@@ -21,7 +27,14 @@ def eval_loop():
     split = args.split
     
     # Initialize the DDPMNextTokenV1 pipeline
-    pipeline = DDPMNextTokenV2.DDPMNextTokenV2Pipeline()
+    if args.model_version == "DDPMNextTokenV2":
+        pipeline = DDPMNextTokenV2.DDPMNextTokenV2Pipeline()
+    elif args.model_version == "DDPMNextTokenV3":
+        pipeline = DDPMNextTokenV3.DDPMNextTokenV3Pipeline()
+    else:
+        pipeline = DDIMNextTokenV1.DDIMNextTokenV1Pipeline()
+    
+    # Initialize the DDPMNextTokenV1 pipeline
     # Configure the training parameters (TODO: make this configurable)
     pipeline.train_config.train_batch_size = batch_size
     pipeline.train_config.eval_batch_size = batch_size
