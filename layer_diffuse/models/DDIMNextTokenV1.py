@@ -6,19 +6,16 @@ import torch
 from dataclasses import dataclass
 import json
 
-from diffusers.configuration_utils import ConfigMixin
 from diffusers.optimization import get_cosine_schedule_with_warmup
 
 from accelerate import notebook_launcher
 
 from diffusers.models.unets.unet_2d import UNet2DModel
  
-from diffusers.models.unets.unet_2d_condition import UNet2DConditionModel
 from diffusers.schedulers.scheduling_ddim import DDIMScheduler
-from diffusers.pipelines.pipeline_utils import DiffusionPipeline
 
 from accelerate import Accelerator
-from huggingface_hub import create_repo, upload_folder
+from huggingface_hub import create_repo
 import huggingface_hub
 from tqdm.auto import tqdm
 from pathlib import Path
@@ -30,9 +27,7 @@ import torch.nn.functional as F
 import os
 from torchvision.utils import make_grid
 from tqdm import tqdm
-from typing import Tuple
 import wandb
-import wandb.util
 import time
 from torchmetrics.image.fid import FrechetInceptionDistance
 
@@ -57,6 +52,9 @@ class TrainingConfig:
     hub_model_id = "QLeca/DDIMNextTokenV1"  # the name of the repository to create on the HF Hub
     wandb_project_name = "ddim-next-token-v1"  # the name of the project on Weights & Biases
     seed = 0
+    train_size = 16000
+    val_size = 16000
+    
 
 @dataclass
 class InferenceConfig:
@@ -93,7 +91,10 @@ class SchedulerConfig(dict):
     def __init__(self) -> None:
         super().__init__()
         self.config = {}
-        self.config['num_train_timesteps'] = 1000
+        self.config['num_train_timesteps'] = 1000,
+        self.config['beta_start'] = 0.0001
+        self.config['beta_end'] = 0.02
+        self.config['beta_schedule'] = 'squaredcos_cap_v2'
 
 class DDIMNextTokenV1Pipeline():
     def __init__(self):
@@ -206,25 +207,26 @@ class DDIMNextTokenV1Pipeline():
     def train(self, train_dataloader, val_dataloader, train_size = 1000, val_size = 100):
         self.train_id = f"run_{time.strftime('%Y-%m-%d_%H-%M-%S')}"
         self.set_num_class_embeds(len(train_dataloader.vocab))
+        self.train_config.train_size=train_size
+        self.train_config.val_size=val_size
         
         # Initialize the wandb run
         wandb.init(
             project=self.train_config.wandb_project_name,
             name=self.train_id,
             config={
-                "image_size": self.train_config.image_size,
-                "num_epochs": self.train_config.num_epochs,
-                "train_batch_size": self.train_config.train_batch_size,
-                "training_steps": train_size,
-                "validation_steps": val_size,
-                "eval_batch_size": self.train_config.eval_batch_size,
-                "learning_rate": self.train_config.learning_rate,
-                "lr_warmup_steps": self.train_config.lr_warmup_steps,
-                "huggingface_repo_id": self.train_config.hub_model_id,
-                "num_class_embeds": self.model_config.config['num_class_embeds'],
-                "dataset_name": train_dataloader.dataset_name,
-                "train_split": train_dataloader.split,
-                "val_split": val_dataloader.split,
+                "run_id": self.train_id,
+                "train_config": self.train_config,
+                "dataset": {
+                    "name": train_dataloader.dataset_name,
+                    "train_split": train_dataloader.split,
+                    "val_split": val_dataloader.split
+                            },
+                "model_config": self.model_config.config,
+                "scheduler_config": self.scheduler_config.config,
+                "inference_config": self.inference_config,
+                "optimizer": 'AdamW',
+                "Lr_scheduler": 'Cosine with warmup',
             }
         )
 
