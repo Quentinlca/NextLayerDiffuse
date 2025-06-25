@@ -38,7 +38,7 @@ def train_loop():
         help="Dataset name to use for training",
     )
     parser.add_argument("--num_epochs", type=int, default=50, help="Training epochs")
-    parser.add_argument("--lr", type=float, default=0.0001, help="Learning rate")
+    parser.add_argument("--lr", type=float, default=0.0002, help="Learning rate")
     parser.add_argument(
         "--warming_steps",
         type=int,
