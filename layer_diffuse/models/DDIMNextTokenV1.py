@@ -216,7 +216,7 @@ class DDIMNextTokenV1Pipeline():
             name=self.train_id,
             config={
                 "run_id": self.train_id,
-                "train_config": self.train_config.__dict__,
+                "train_config": self.train_config.__dataclass_fields__,
                 "dataset": {
                     "name": train_dataloader.dataset_name,
                     "train_split": train_dataloader.split,
@@ -224,7 +224,7 @@ class DDIMNextTokenV1Pipeline():
                             },
                 "model_config": self.model_config.config,
                 "scheduler_config": self.scheduler_config.config,
-                "inference_config": self.inference_config.__dict__,
+                "inference_config": self.inference_config.__dataclass_fields__,
                 "optimizer": 'AdamW',
                 "Lr_scheduler": 'Cosine with warmup',
             }
