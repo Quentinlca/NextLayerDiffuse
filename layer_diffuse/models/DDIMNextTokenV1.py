@@ -199,10 +199,11 @@ class DDIMNextTokenV1Pipeline():
 
     def train_accelerate(self, train_dataloader, val_dataloader, train_size = 1000, val_size = 100, **params):
 
+        # Pass the parameters as keyword arguments to the train method
+        def train_wrapper():
+            return self.train(train_dataloader, val_dataloader, train_size, val_size, **params)
 
-        args = (train_dataloader, val_dataloader, train_size, val_size, params)
-
-        notebook_launcher(self.train, args, num_processes=1)
+        notebook_launcher(train_wrapper, args=(), num_processes=1)
 
     def train(self, train_dataloader, val_dataloader, train_size = 1000, val_size = 100, **params):
         self.train_id = f"run_{time.strftime('%Y-%m-%d_%H-%M-%S')}"
