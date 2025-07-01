@@ -42,7 +42,7 @@ def train_loop():
     parser.add_argument(
         "--warming_steps",
         type=int,
-        default=500,
+        default=1000,
         help="Learning rate scheduler warming steps",
     )
     parser.add_argument(
