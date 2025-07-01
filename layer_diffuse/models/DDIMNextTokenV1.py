@@ -197,14 +197,14 @@ class DDIMNextTokenV1Pipeline():
             img.close()
             return os.path.join(save_dir, 'result_epoch_{}.png'.format(epoch))
 
-    def train_accelerate(self, train_dataloader, val_dataloader, train_size = 1000, val_size = 100):
+    def train_accelerate(self, train_dataloader, val_dataloader, train_size = 1000, val_size = 100, **params):
 
 
-        args = (train_dataloader, val_dataloader, train_size, val_size)
+        args = (train_dataloader, val_dataloader, train_size, val_size, params)
 
         notebook_launcher(self.train, args, num_processes=1)
 
-    def train(self, train_dataloader, val_dataloader, train_size = 1000, val_size = 100):
+    def train(self, train_dataloader, val_dataloader, train_size = 1000, val_size = 100, **params):
         self.train_id = f"run_{time.strftime('%Y-%m-%d_%H-%M-%S')}"
         self.set_num_class_embeds(len(train_dataloader.vocab))
         self.train_config.train_size=train_size
@@ -227,17 +227,18 @@ class DDIMNextTokenV1Pipeline():
                 "inference_config": self.inference_config.__dataclass_fields__,
                 "optimizer": 'AdamW',
                 "Lr_scheduler": 'Cosine with warmup',
+                "other_params": params,
             }
         )
-
+        num_cycles = params.get('num_cycles', 0.5)
         # Create the optimizer and learning rate scheduler
         optimizer = torch.optim.AdamW(self.unet.parameters(), lr=self.train_config.learning_rate)
         lr_scheduler = get_cosine_schedule_with_warmup(
                                                         optimizer=optimizer,
                                                         num_warmup_steps=self.train_config.lr_warmup_steps,
                                                         num_training_steps=(train_size * self.train_config.num_epochs // self.train_config.train_batch_size),
+                                                        num_cycles=num_cycles
                                                     )
-        
         # Initialize accelerator and tensorboard logging
         accelerator = Accelerator(
             mixed_precision=self.train_config.mixed_precision,

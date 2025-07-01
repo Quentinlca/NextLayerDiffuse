@@ -45,6 +45,12 @@ def train_loop():
         default=500,
         help="Learning rate scheduler warming steps",
     )
+    parser.add_argument(
+        "--num_cycles",
+        type=float,
+        default=0.5,
+        help="Number of cycles for the cosine learning rate scheduler",
+    )
 
     args = parser.parse_args()
     # get the training and validation sizes from the command line arguments
@@ -55,7 +61,12 @@ def train_loop():
     num_epochs = args.num_epochs
     lr = args.lr
     warming_steps = args.warming_steps
-
+    num_cycles = args.num_cycles
+    
+    extra_kwargs = {
+        "num_cycles": num_cycles,  # Pass the num_cycles parameter
+    }
+    
     # Initialize the DDPMNextTokenV1 pipeline
     if args.model_version == "DDPMNextTokenV1":
         pipeline = DDPMNextTokenV1.DDPMNextTokenV1Pipeline()
@@ -93,6 +104,7 @@ def train_loop():
         val_dataloader=val_dataloader,
         train_size=train_size,
         val_size=val_size,
+        **extra_kwargs  # Pass all extra parameters through
     )
 
 
