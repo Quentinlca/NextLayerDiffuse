@@ -51,6 +51,13 @@ def train_loop():
         default=0.5,
         help="Number of cycles for the cosine learning rate scheduler",
     )
+    parser.add_argument(
+        "--train_tags",
+        type=str,
+        nargs='*',
+        default=None,
+        help="Tags for the training run (optional, can be used for wandb tagging)",
+    )
 
     args = parser.parse_args()
     # get the training and validation sizes from the command line arguments
@@ -62,9 +69,10 @@ def train_loop():
     lr = args.lr
     warming_steps = args.warming_steps
     num_cycles = args.num_cycles
-    
+    train_tags = args.train_tags
     extra_kwargs = {
         "num_cycles": num_cycles,  # Pass the num_cycles parameter
+        "train_tags": train_tags,  # Pass the train_tags parameter
     }
     
     # Initialize the DDPMNextTokenV1 pipeline

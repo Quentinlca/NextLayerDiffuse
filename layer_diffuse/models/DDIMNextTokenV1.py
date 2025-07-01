@@ -210,10 +210,14 @@ class DDIMNextTokenV1Pipeline():
         self.train_config.train_size=train_size
         self.train_config.val_size=val_size
         
+        num_cycles = params.get('num_cycles', 0.5)
+        train_tags = params.get('train_tags', None)
+        
         # Initialize the wandb run
         wandb.init(
             project=self.train_config.wandb_project_name,
             name=self.train_id,
+            tags=train_tags,
             config={
                 "run_id": self.train_id,
                 "train_config": self.train_config.__dataclass_fields__,
@@ -230,7 +234,8 @@ class DDIMNextTokenV1Pipeline():
                 "other_params": params,
             }
         )
-        num_cycles = params.get('num_cycles', 0.5)
+        
+        
         # Create the optimizer and learning rate scheduler
         optimizer = torch.optim.AdamW(self.unet.parameters(), lr=self.train_config.learning_rate)
         lr_scheduler = get_cosine_schedule_with_warmup(
