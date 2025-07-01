@@ -399,12 +399,24 @@ class DDIMNextTokenV1Pipeline():
                     accelerator.backward(loss)
 
                     if accelerator.sync_gradients:
-                        # Check gradients for NaN before clipping
-                        grad_norm = accelerator.clip_grad_norm_(self.unet.parameters(), 1.0)
-                        if grad_norm is not None and (torch.isnan(grad_norm) or torch.isinf(grad_norm)):
-                            print(f"Warning: NaN or Inf gradient norm detected at step {step}, epoch {epoch}. Skipping optimizer step.")
+                        # Check for NaN gradients before clipping by checking parameter gradients directly
+                        has_nan_gradients = False
+                        for name, param in self.unet.named_parameters():
+                            if param.grad is not None and (torch.isnan(param.grad).any() or torch.isinf(param.grad).any()):
+                                print(f"Warning: NaN or Inf gradient detected in parameter {name} at step {step}, epoch {epoch}")
+                                has_nan_gradients = True
+                                break
+                        
+                        if has_nan_gradients:
+                            # Zero out gradients and skip this step, but still call optimizer.step() to keep scaler consistent
                             optimizer.zero_grad()
-                            continue
+                            nan_count += 1
+                            if nan_count > max_nan_tolerance:
+                                print(f"Too many NaN occurrences ({nan_count}). Stopping training early.")
+                                return
+                        else:
+                            # Normal gradient clipping and optimization step
+                            accelerator.clip_grad_norm_(self.unet.parameters(), 1.0)
                     
                     optimizer.step()
                     lr_scheduler.step()
