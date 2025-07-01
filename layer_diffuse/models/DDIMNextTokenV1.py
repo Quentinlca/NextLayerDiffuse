@@ -159,8 +159,18 @@ class DDIMNextTokenV1Pipeline():
                                            timestep=time_step,
                                            class_labels=class_labels).sample # type: ignore
             
+            # Check for NaN values in noise prediction
+            if torch.isnan(noise_pred).any():
+                print(f"Warning: NaN values detected in noise prediction during inference at timestep {t}")
+                noise_pred = torch.nan_to_num(noise_pred, nan=0.0)
+            
             # Use scheduler to get x0 and xt-1
             xt = self.scheduler.step(noise_pred, t, xt, return_dict=False)[0]
+            
+            # Check for NaN values in xt
+            if torch.isnan(xt).any():
+                print(f"Warning: NaN values detected in xt during inference at timestep {t}")
+                xt = torch.nan_to_num(xt, nan=0.0)
             # Save x0
         return xt
             
@@ -178,11 +188,23 @@ class DDIMNextTokenV1Pipeline():
         
         output_images = self.__call__(input_images, class_labels, num_inference_steps)
         
+        # Check for NaN values and replace them with zeros
+        if torch.isnan(output_images).any():
+            print(f"Warning: NaN values detected in output images at epoch {epoch}. Replacing with zeros.")
+            output_images = torch.nan_to_num(output_images, nan=0.0)
+        
         output_images = (output_images * 0.5 + 0.5).clamp(0, 1).cpu()
         
         input_images = (input_images * 0.5 + 0.5).clamp(0, 1).cpu()
         
         target_images = (target_images * 0.5  + 0.5).clamp(0, 1).cpu()
+        
+        # Additional check after normalization
+        if torch.isnan(output_images).any() or torch.isnan(input_images).any() or torch.isnan(target_images).any():
+            print(f"Warning: NaN values detected after normalization at epoch {epoch}. Replacing with zeros.")
+            output_images = torch.nan_to_num(output_images, nan=0.0)
+            input_images = torch.nan_to_num(input_images, nan=0.0)
+            target_images = torch.nan_to_num(target_images, nan=0.0)
         
         concat = torch.concat([input_images, output_images, target_images])
         grid = make_grid(concat, nrow=input_images.shape[0])
@@ -275,9 +297,20 @@ class DDIMNextTokenV1Pipeline():
         )
 
         global_step = 0
+        nan_count = 0  # Counter for NaN occurrences
+        max_nan_tolerance = 10  # Maximum number of NaN occurrences before stopping
+        
         # Now you train the model
         random_generator = torch.Generator(device=self.device) # For the dataset sampling
         for epoch in range(self.train_config.num_epochs):
+            # Check for NaN values in model parameters at the start of each epoch
+            if self.check_model_for_nan():
+                print(f"NaN values detected in model parameters at the start of epoch {epoch}. Attempting to reset...")
+                if self.reset_nan_parameters():
+                    print("Model parameters reset. Continuing training...")
+                else:
+                    print("Failed to reset parameters. Training may be unstable.")
+            
             # Take a random subset of the training dataset of size train_size
             if train_size is not None and train_size < len(train_dataloader.dataset): # type: ignore
                 indices = torch.randperm(len(train_dataloader.dataset), # type: ignore
@@ -313,7 +346,17 @@ class DDIMNextTokenV1Pipeline():
             for step, batch in enumerate(train_dataloader):
                 input_images = batch["input"].to(self.device)
                 target_images = batch["target"].to(self.device)
-                class_labels = batch['label'].to(self.device)  
+                class_labels = batch['label'].to(self.device)
+                
+                # Check for NaN values in input data
+                if torch.isnan(input_images).any() or torch.isnan(target_images).any():
+                    print(f"Warning: NaN values detected in input data at step {step}, epoch {epoch}. Skipping this batch.")
+                    nan_count += 1
+                    if nan_count > max_nan_tolerance:
+                        print(f"Too many NaN occurrences ({nan_count}). Stopping training early.")
+                        return
+                    continue
+                
                 # Sample noise to add to the images
                 noise = torch.randn(target_images.shape, device=self.device)
                 bs = target_images.shape[0]
@@ -334,10 +377,35 @@ class DDIMNextTokenV1Pipeline():
                                            timestep=timesteps,
                                            class_labels=class_labels).sample
                     loss = F.mse_loss(noise_pred, noise)
+                    
+                    # Check for NaN loss and skip this batch if detected
+                    if torch.isnan(loss) or torch.isinf(loss):
+                        print(f"Warning: NaN or Inf loss detected at step {step}, epoch {epoch}. Skipping this batch.")
+                        nan_count += 1
+                        if nan_count > max_nan_tolerance:
+                            print(f"Too many NaN occurrences ({nan_count}). Stopping training early.")
+                            return
+                        continue
+                    
+                    # Check for NaN values in noise prediction
+                    if torch.isnan(noise_pred).any():
+                        print(f"Warning: NaN values detected in noise prediction at step {step}, epoch {epoch}. Skipping this batch.")
+                        nan_count += 1
+                        if nan_count > max_nan_tolerance:
+                            print(f"Too many NaN occurrences ({nan_count}). Stopping training early.")
+                            return
+                        continue
+                    
                     accelerator.backward(loss)
 
                     if accelerator.sync_gradients:
-                        accelerator.clip_grad_norm_(self.unet.parameters(), 1.0)
+                        # Check gradients for NaN before clipping
+                        grad_norm = accelerator.clip_grad_norm_(self.unet.parameters(), 1.0)
+                        if grad_norm is not None and (torch.isnan(grad_norm) or torch.isinf(grad_norm)):
+                            print(f"Warning: NaN or Inf gradient norm detected at step {step}, epoch {epoch}. Skipping optimizer step.")
+                            optimizer.zero_grad()
+                            continue
+                    
                     optimizer.step()
                     lr_scheduler.step()
                     optimizer.zero_grad()
@@ -527,5 +595,22 @@ class DDIMNextTokenV1Pipeline():
             return True
         else:
             return False
-            
-        
+    
+    def check_model_for_nan(self):
+        """Check if any model parameters contain NaN values."""
+        for name, param in self.unet.named_parameters():
+            if torch.isnan(param).any():
+                print(f"Warning: NaN values detected in parameter: {name}")
+                return True
+        return False
+    
+    def reset_nan_parameters(self):
+        """Reset any NaN parameters to their initialization values."""
+        nan_found = False
+        for name, param in self.unet.named_parameters():
+            if torch.isnan(param).any():
+                print(f"Resetting NaN parameter: {name}")
+                torch.nn.init.normal_(param, mean=0.0, std=0.02)
+                nan_found = True
+        return nan_found
+
