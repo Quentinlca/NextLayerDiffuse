@@ -55,10 +55,16 @@ class TrainingConfig:
     train_size = 16000
     val_size = 16000
     
+    def get_dict(self):
+        return {attributes: getattr(self, attributes) for attributes in dir(self) if not attributes.startswith('__')}
 
 @dataclass
 class InferenceConfig:
     num_inference_steps = 50  # number of denoising steps
+    
+    def get_dict(self):
+        return {attributes: getattr(self, attributes) for attributes in dir(self) if not attributes.startswith('__')}
+
 
 class ModelConfig(dict):
     def __init__(self) -> None:
@@ -221,7 +227,7 @@ class DDIMNextTokenV1Pipeline():
             tags=train_tags,
             config={
                 "run_id": self.train_id,
-                "train_config": self.train_config.__dataclass_fields__,
+                "train_config": self.train_config.get_dict(),
                 "dataset": {
                     "name": train_dataloader.dataset_name,
                     "train_split": train_dataloader.split,
@@ -229,7 +235,7 @@ class DDIMNextTokenV1Pipeline():
                             },
                 "model_config": self.model_config.config,
                 "scheduler_config": self.scheduler_config.config,
-                "inference_config": self.inference_config.__dataclass_fields__,
+                "inference_config": self.inference_config.get_dict(),
                 "optimizer": 'AdamW',
                 "Lr_scheduler": 'Cosine with warmup',
                 "other_params": params,
