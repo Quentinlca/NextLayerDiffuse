@@ -1,46 +1,26 @@
 #!/usr/bin/env python3
 """
-Optimized training script with performance improvements for faster training.
-
-This script includes several optimizations:
-1. Mixed precision training (fp16/bf16)
-2. Gradient accumulation for larger effective batch sizes
-3. Multi-worker data loading
-4. Memory optimizations
-
-Usage examples:
-    # Basic fast training with mixed precision and larger effective batch size
-    python train_optimized.py --batch_size 32 --gradient_accumulation_steps 4 --mixed_precision fp16
-
-    # Maximum performance setup
-    python train_optimized.py --batch_size 64 --gradient_accumulation_steps 2 --mixed_precision bf16 --dataloader_num_workers 8
-
-    # For limited GPU memory
-    python train_optimized.py --batch_size 16 --gradient_accumulation_steps 8 --mixed_precision fp16
-
-    # With custom learning rate and scheduler settings
-    python train_optimized.py --lr 0.0001 --warming_steps 500 --num_cycles 1.0
-
-    # With wandb tags for experiment tracking
-    python train_optimized.py --train_tags experiment_1 fast_training mixed_precision
+CUDA-Safe Optimized Training Script
+Fixed version that avoids CUDA initialization errors by using safe defaults.
 """
 
 import subprocess
 import argparse
 import sys
+import os
 
 def main():
-    parser = argparse.ArgumentParser(description="Optimized training launcher")
+    parser = argparse.ArgumentParser(description="CUDA-Safe Optimized training launcher")
     
-    # Performance optimization arguments
+    # Performance optimization arguments with CUDA-safe defaults
     parser.add_argument("--batch_size", type=int, default=16, 
-                       help="Base batch size (reduced default to avoid CUDA errors)")
+                       help="Base batch size (reduced default for CUDA safety)")
     parser.add_argument("--gradient_accumulation_steps", type=int, default=8,
                        help="Gradient accumulation steps (increased to compensate for smaller batch)")
     parser.add_argument("--mixed_precision", type=str, default="fp16", choices=["no", "fp16", "bf16"],
-                       help="Mixed precision mode (fp16 for older GPUs, bf16 for newer)")
+                       help="Mixed precision mode")
     parser.add_argument("--dataloader_num_workers", type=int, default=0,
-                       help="Number of data loading workers (0 = CUDA-safe, no multiprocessing)")
+                       help="Number of data loading workers (0 = no multiprocessing, CUDA-safe)")
     
     # Training parameters
     parser.add_argument("--model_version", type=str, default="DDIMNextTokenV1",
@@ -59,14 +39,18 @@ def main():
     
     args = parser.parse_args()
     
+    # Set CUDA environment variables for debugging
+    os.environ['CUDA_LAUNCH_BLOCKING'] = '1'
+    os.environ['TORCH_USE_CUDA_DSA'] = '1'
+    
     # Calculate effective batch size
     effective_batch_size = args.batch_size * args.gradient_accumulation_steps
-    print(f"🚀 Starting optimized training with:")
+    print(f"🚀 Starting CUDA-safe optimized training with:")
     print(f"   Base batch size: {args.batch_size}")
     print(f"   Gradient accumulation steps: {args.gradient_accumulation_steps}")
     print(f"   Effective batch size: {effective_batch_size}")
     print(f"   Mixed precision: {args.mixed_precision}")
-    print(f"   Data workers: {args.dataloader_num_workers} {'(CUDA-safe)' if args.dataloader_num_workers == 0 else '(may cause CUDA errors)'}")
+    print(f"   Data workers: {args.dataloader_num_workers} (0 = CUDA-safe)")
     print(f"   Model: {args.model_version}")
     print(f"   Learning rate: {args.lr}")
     print(f"   Warming steps: {args.warming_steps}")
@@ -76,9 +60,10 @@ def main():
     print(f"   Epochs: {args.num_epochs}")
     print(f"   Dataset: {args.dataset_name}")
     
-    if args.dataloader_num_workers > 0:
-        print("\n⚠️  WARNING: Using multiprocessing workers may cause CUDA initialization errors!")
-        print("   If you get CUDA errors, try: --dataloader_num_workers 0")
+    if args.dataloader_num_workers == 0:
+        print("✅ Using CUDA-safe configuration (no multiprocessing workers)")
+    else:
+        print("⚠️  Warning: Using multiprocessing workers may cause CUDA errors")
     
     # Build command
     cmd = [
@@ -109,11 +94,10 @@ def main():
     except subprocess.CalledProcessError as e:
         print(f"❌ Training failed with exit code {e.returncode}")
         print("\n🔧 CUDA Error Troubleshooting:")
-        print("If you got a CUDA initialization error, try:")
-        print("1. --dataloader_num_workers 0 (disable multiprocessing)")
-        print("2. --batch_size 8 (reduce memory usage)")
-        print("3. Restart your Python session to clear CUDA context")
-        print("4. Run: python train_cuda_safe.py (uses safe defaults)")
+        print("1. Try with even smaller batch size: --batch_size 8")
+        print("2. Ensure no multiprocessing: --dataloader_num_workers 0")
+        print("3. Check GPU memory: nvidia-smi")
+        print("4. Restart Python to clear CUDA context")
         sys.exit(e.returncode)
     except KeyboardInterrupt:
         print("\n⏹️  Training interrupted by user")
