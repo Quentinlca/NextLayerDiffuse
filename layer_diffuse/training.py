@@ -20,10 +20,16 @@ def train_loop():
         help="Model version to use for training",
     )
     parser.add_argument(
-        "--train_size", type=int, default=16000, help="Number of training batches"
+        "--train_size",
+        type=int,
+        default=16000,
+        help="Number of training batches",
     )
     parser.add_argument(
-        "--val_size", type=int, default=1600, help="Number of validation batches"
+        "--val_size",
+        type=int,
+        default=1600,
+        help="Number of validation batches",
     )
     parser.add_argument(
         "--batch_size",
@@ -37,8 +43,18 @@ def train_loop():
         default="QLeca/modular_characters_hairs_RGB",
         help="Dataset name to use for training",
     )
-    parser.add_argument("--num_epochs", type=int, default=50, help="Training epochs")
-    parser.add_argument("--lr", type=float, default=0.0002, help="Learning rate")
+    parser.add_argument(
+        "--num_epochs",
+        type=int,
+        default=50,
+        help="Training epochs",
+    )
+    parser.add_argument(
+        "--lr",
+        type=float,
+        default=0.0002,
+        help="Learning rate",
+    )
     parser.add_argument(
         "--warming_steps",
         type=int,
@@ -58,6 +74,25 @@ def train_loop():
         default=None,
         help="Tags for the training run (optional, can be used for wandb tagging)",
     )
+    parser.add_argument(
+        "--gradient_accumulation_steps",
+        type=int,
+        default=4,
+        help="Number of gradient accumulation steps (effectively multiplies batch size)",
+    )
+    parser.add_argument(
+        "--mixed_precision",
+        type=str,
+        default="fp16",
+        choices=["no", "fp16", "bf16"],
+        help="Mixed precision training mode",
+    )
+    parser.add_argument(
+        "--dataloader_num_workers",
+        type=int,
+        default=4,
+        help="Number of workers for data loading",
+    )
 
     args = parser.parse_args()
     # get the training and validation sizes from the command line arguments
@@ -70,9 +105,15 @@ def train_loop():
     warming_steps = args.warming_steps
     num_cycles = args.num_cycles
     train_tags = args.train_tags
+    gradient_accumulation_steps = args.gradient_accumulation_steps
+    mixed_precision = args.mixed_precision
+    dataloader_num_workers = args.dataloader_num_workers
     extra_kwargs = {
         "num_cycles": num_cycles,  # Pass the num_cycles parameter
         "train_tags": train_tags,  # Pass the train_tags parameter
+        "gradient_accumulation_steps": gradient_accumulation_steps,
+        "mixed_precision": mixed_precision,
+        "dataloader_num_workers": dataloader_num_workers,
     }
     
     # Initialize the DDPMNextTokenV1 pipeline
@@ -90,6 +131,12 @@ def train_loop():
     pipeline.train_config.num_epochs = num_epochs
     pipeline.train_config.learning_rate = lr
     pipeline.train_config.lr_warmup_steps = warming_steps
+    
+    # Set performance optimizations
+    if gradient_accumulation_steps > 1:
+        pipeline.train_config.gradient_accumulation_steps = gradient_accumulation_steps
+    if mixed_precision in ["fp16", "bf16"]:
+        pipeline.train_config.mixed_precision = mixed_precision
 
     # Get the dataloaders for training and validation
     train_dataloader = ModularCharatersDataLoader.get_modular_char_dataloader(
@@ -98,6 +145,9 @@ def train_loop():
         image_size=pipeline.train_config.image_size,
         batch_size=pipeline.train_config.train_batch_size,
         shuffle=True,
+        num_workers=dataloader_num_workers,
+        pin_memory=True,
+        persistent_workers=True if dataloader_num_workers > 0 else False,
     )
     val_dataloader = ModularCharatersDataLoader.get_modular_char_dataloader(
         dataset_name=dataset_name,
@@ -105,6 +155,9 @@ def train_loop():
         image_size=pipeline.train_config.image_size,
         batch_size=pipeline.train_config.eval_batch_size,
         shuffle=True,
+        num_workers=dataloader_num_workers,
+        pin_memory=True,
+        persistent_workers=True if dataloader_num_workers > 0 else False,
     )
     # Start the training process
     pipeline.train_accelerate(
