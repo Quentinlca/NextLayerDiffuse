@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-Performance monitoring and GPU utilization script.
+Fixed Performance monitoring and GPU utilization script.
 Use this to monitor your training performance and identify bottlenecks.
 """
 
@@ -8,16 +8,7 @@ import torch
 import psutil
 import time
 import subprocess
-import json
 from datetime import datetime
-
-# Try to import GPUtil, but don't fail if it's not available
-try:
-    import GPUtil
-    GPUTIL_AVAILABLE = True
-except ImportError:
-    GPUTIL_AVAILABLE = False
-    print("⚠️  GPUtil not available. Using nvidia-ml-py3 or nvidia-smi fallback.")
 
 def get_gpu_info_nvidia_smi():
     """Alternative GPU info using nvidia-smi command."""
@@ -49,7 +40,7 @@ def get_gpu_info_nvidia_smi():
         return None
 
 def get_gpu_info_pynvml():
-    """Alternative GPU info using pynvml."""
+    """Alternative GPU info using nvidia-ml-py3."""
     try:
         import pynvml as nvml
         nvml.nvmlInit()
@@ -71,6 +62,12 @@ def get_gpu_info_pynvml():
                 'memory_util': float(util.memory)
             })
         
+        return gpu_info
+    except ImportError:
+        return None
+    except Exception:
+        return None
+
 def monitor_system():
     """Monitor system resources during training."""
     print("🔍 System Performance Monitor")
@@ -85,25 +82,13 @@ def monitor_system():
             print(f"   Memory: {gpu.total_memory / 1024**3:.1f} GB")
         
         # Try different methods to get GPU utilization
-        gpu_info = None
-        if GPUTIL_AVAILABLE:
-            try:
-                gpus = GPUtil.getGPUs()
-                for gpu in gpus:
-                    print(f"   GPU {gpu.id} Utilization: {gpu.load*100:.1f}%")
-                    print(f"   GPU {gpu.id} Memory: {gpu.memoryUsed}/{gpu.memoryTotal} MB ({gpu.memoryUtil*100:.1f}%)")
-            except:
-                gpu_info = None
-        
-        # Try pynvml if GPUtil failed
-        if gpu_info is None:
-            gpu_info = get_gpu_info_pynvml()
+        gpu_info = get_gpu_info_pynvml()
         
         # Try nvidia-smi if pynvml failed
         if gpu_info is None:
             gpu_info = get_gpu_info_nvidia_smi()
         
-        # Display GPU info from alternative methods
+        # Display GPU info
         if gpu_info:
             for gpu in gpu_info:
                 print(f"   GPU {gpu['id']} Utilization: {gpu['gpu_util']:.1f}%")
@@ -111,24 +96,6 @@ def monitor_system():
         else:
             print("   ⚠️  GPU utilization monitoring unavailable")
             print("   💡 Install nvidia-ml-py3: pip install nvidia-ml-py3")
-    else:
-        print("❌ CUDA not available")
-    """Monitor system resources during training."""
-    print("🔍 System Performance Monitor")
-    print("=" * 50)
-    
-    # GPU Information
-    if torch.cuda.is_available():
-        print(f"🎮 GPU Information:")
-        for i in range(torch.cuda.device_count()):
-            gpu = torch.cuda.get_device_properties(i)
-            print(f"   GPU {i}: {gpu.name}")
-            print(f"   Memory: {gpu.total_memory / 1024**3:.1f} GB")
-        
-        gpus = GPUtil.getGPUs()
-        for gpu in gpus:
-            print(f"   GPU {gpu.id} Utilization: {gpu.load*100:.1f}%")
-            print(f"   GPU {gpu.id} Memory: {gpu.memoryUsed}/{gpu.memoryTotal} MB ({gpu.memoryUtil*100:.1f}%)")
     else:
         print("❌ CUDA not available")
     
@@ -172,8 +139,17 @@ def get_optimal_settings():
             print("   Conservative: --batch_size 4 --gradient_accumulation_steps 16 --mixed_precision fp16")
         
         # Data loading recommendations
-        cpu_cores = psutil.cpu_count(logical=False)
+        cpu_cores = psutil.cpu_count(logical=False) or 4  # Default to 4 if None
         print(f"\n   Data loading: --dataloader_num_workers {min(8, cpu_cores)}")
+        
+        # Generate example commands
+        print(f"\n🚀 Example Commands:")
+        if gpu_memory_gb >= 16:
+            print("   Fast training:")
+            print("   python train_optimized.py --batch_size 32 --gradient_accumulation_steps 4 --mixed_precision fp16")
+        else:
+            print("   Memory-efficient training:")
+            print("   python train_optimized.py --batch_size 16 --gradient_accumulation_steps 8 --mixed_precision fp16")
         
     else:
         print("   CPU-only training not recommended for diffusion models")
@@ -187,33 +163,62 @@ def benchmark_data_loading():
         from data_loaders.ModularCharatersDataLoader import get_modular_char_dataloader
         
         # Test different worker counts
+        best_time = float('inf')
+        best_workers = 0
+        
         for num_workers in [0, 2, 4, 8]:
-            print(f"Testing {num_workers} workers...")
-            start_time = time.time()
-            
-            dataloader = get_modular_char_dataloader(
-                dataset_name="QLeca/modular_characters_hairs_RGB",
-                split="train",
-                image_size=128,
-                batch_size=16,
-                shuffle=True,
-                num_workers=num_workers,
-                pin_memory=True if num_workers > 0 else False,
-                persistent_workers=True if num_workers > 0 else False,
-            )
-            
-            # Time loading first few batches
-            for i, batch in enumerate(dataloader):
-                if i >= 5:  # Test first 5 batches
-                    break
-            
-            elapsed = time.time() - start_time
-            print(f"   {num_workers} workers: {elapsed:.2f}s for 5 batches")
+            try:
+                print(f"Testing {num_workers} workers...", end=" ")
+                start_time = time.time()
+                
+                dataloader = get_modular_char_dataloader(
+                    dataset_name="QLeca/modular_characters_hairs_RGB",
+                    split="train",
+                    image_size=128,
+                    batch_size=16,
+                    shuffle=True,
+                    num_workers=num_workers,
+                    pin_memory=True if num_workers > 0 else False,
+                    persistent_workers=True if num_workers > 0 else False,
+                )
+                
+                # Time loading first few batches
+                for i, batch in enumerate(dataloader):
+                    if i >= 3:  # Test first 3 batches
+                        break
+                
+                elapsed = time.time() - start_time
+                print(f"{elapsed:.2f}s")
+                
+                if elapsed < best_time:
+                    best_time = elapsed
+                    best_workers = num_workers
+                    
+            except Exception as e:
+                print(f"Failed: {e}")
+        
+        print(f"\n🏆 Best performance: {best_workers} workers ({best_time:.2f}s)")
+        print(f"   Recommended: --dataloader_num_workers {best_workers}")
             
     except Exception as e:
         print(f"   ❌ Benchmark failed: {e}")
+        print("   💡 Make sure you're running from the layer_diffuse directory")
+
+def install_missing_packages():
+    """Install missing packages for better GPU monitoring."""
+    print("\n📦 Package Installation Helper:")
+    print("=" * 50)
+    
+    print("For better GPU monitoring, install:")
+    print("   pip install nvidia-ml-py3")
+    print()
+    print("For additional dependencies:")
+    print("   pip install psutil torch")
+    print()
+    print("Note: GPUtil has installation issues, so we use nvidia-ml-py3 instead.")
 
 if __name__ == "__main__":
     monitor_system()
     get_optimal_settings()
     benchmark_data_loading()
+    install_missing_packages()
