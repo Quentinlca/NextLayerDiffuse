@@ -12,6 +12,7 @@ dataset_generator/generated_datasets/
 dataset_generator/characters.json
 dataset_generator/cache
 **/nohup.out
+cache/*
 
 
 
