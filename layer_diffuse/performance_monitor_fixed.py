@@ -42,7 +42,7 @@ def get_gpu_info_nvidia_smi():
 def get_gpu_info_pynvml():
     """Alternative GPU info using nvidia-ml-py3."""
     try:
-        import pynvml as nvml
+        import pynvml as nvml #type: ignore[import-untyped]
         nvml.nvmlInit()
         gpu_info = []
         device_count = nvml.nvmlDeviceGetCount()

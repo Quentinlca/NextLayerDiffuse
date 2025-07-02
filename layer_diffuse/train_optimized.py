@@ -17,6 +17,12 @@ Usage examples:
 
     # For limited GPU memory
     python train_optimized.py --batch_size 16 --gradient_accumulation_steps 8 --mixed_precision fp16
+
+    # With custom learning rate and scheduler settings
+    python train_optimized.py --lr 0.0001 --warming_steps 500 --num_cycles 1.0
+
+    # With wandb tags for experiment tracking
+    python train_optimized.py --train_tags experiment_1 fast_training mixed_precision
 """
 
 import subprocess
@@ -43,6 +49,12 @@ def main():
     parser.add_argument("--val_size", type=int, default=1600)
     parser.add_argument("--num_epochs", type=int, default=50)
     parser.add_argument("--lr", type=float, default=0.0002)
+    parser.add_argument("--warming_steps", type=int, default=1000, 
+                       help="Learning rate scheduler warming steps")
+    parser.add_argument("--num_cycles", type=float, default=0.5,
+                       help="Number of cycles for the cosine learning rate scheduler")
+    parser.add_argument("--train_tags", type=str, nargs='*', default=None,
+                       help="Tags for the training run (optional, can be used for wandb tagging)")
     parser.add_argument("--dataset_name", type=str, default="QLeca/modular_characters_hairs_RGB")
     
     args = parser.parse_args()
@@ -56,6 +68,13 @@ def main():
     print(f"   Mixed precision: {args.mixed_precision}")
     print(f"   Data workers: {args.dataloader_num_workers}")
     print(f"   Model: {args.model_version}")
+    print(f"   Learning rate: {args.lr}")
+    print(f"   Warming steps: {args.warming_steps}")
+    print(f"   Num cycles: {args.num_cycles}")
+    if args.train_tags:
+        print(f"   Train tags: {', '.join(args.train_tags)}")
+    print(f"   Epochs: {args.num_epochs}")
+    print(f"   Dataset: {args.dataset_name}")
     
     # Build command
     cmd = [
@@ -69,8 +88,14 @@ def main():
         "--val_size", str(args.val_size),
         "--num_epochs", str(args.num_epochs),
         "--lr", str(args.lr),
+        "--warming_steps", str(args.warming_steps),
+        "--num_cycles", str(args.num_cycles),
         "--dataset_name", args.dataset_name,
     ]
+    
+    # Add train_tags if provided
+    if args.train_tags:
+        cmd.extend(["--train_tags"] + args.train_tags)
     
     print(f"\n🏃‍♂️ Running command: {' '.join(cmd)}")
     
