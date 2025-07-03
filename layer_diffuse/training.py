@@ -10,9 +10,17 @@ import argparse
 
 def train_loop():
     # Parsing
-    val_split = f"train"
-    train_split = f"train"
     parser = argparse.ArgumentParser(description="Train DDIMNextTokenV1 model.")
+    parser.add_argument("--train_split",
+        type=str,
+        default="train",
+        help="Split to use for training (default: 'train')",
+    )
+    parser.add_argument("--val_split",
+        type=str,
+        default="train",
+        help="Split to use for validation (default: 'train')",
+    )
     parser.add_argument("--model_version",
         type=str,
         default="DDIMNextTokenV1",
@@ -95,19 +103,25 @@ def train_loop():
 
     args = parser.parse_args()
     # get the training and validation sizes from the command line arguments
+    val_split = args.val_split
+    train_split = args.train_split
     train_size = args.train_size
     val_size = args.val_size
     batch_size = args.batch_size
     dataset_name = args.dataset_name
+    
     num_epochs = args.num_epochs
     lr = args.lr
     warming_steps = args.warming_steps
+    beta_schedule = args.beta_schedule
     num_cycles = args.num_cycles
-    train_tags = args.train_tags
+    
     gradient_accumulation_steps = args.gradient_accumulation_steps
     mixed_precision = args.mixed_precision
     dataloader_num_workers = args.dataloader_num_workers
-    beta_schedule = args.beta_schedule
+    
+    train_tags = args.train_tags
+    
     extra_kwargs = {
         "num_cycles": num_cycles,  # Pass the num_cycles parameter
         "train_tags": train_tags,  # Pass the train_tags parameter
@@ -128,7 +142,6 @@ def train_loop():
         scheduler_config = DDIMNextTokenV1.SchedulerConfig()
         scheduler_config.config['beta_schedule'] = beta_schedule
         pipeline = DDIMNextTokenV1.DDIMNextTokenV1Pipeline(scheduler_config=scheduler_config)
-    # Configure the training parameters (TODO: make this configurable)
     pipeline.train_config.train_batch_size = batch_size
     pipeline.train_config.eval_batch_size = batch_size
     pipeline.train_config.num_epochs = num_epochs
