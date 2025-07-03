@@ -122,21 +122,30 @@ class NextTokenGenerator:
         rows = []
         
     def generate_dataset_smarter(self, assets_dir:str):
-        def get_next_layer(input_image, component_path):
+        def get_output_path(img_nb, layer_id):
+            image_number = "0"*(FILE_NUMBER_LENGHT-len(str(img_nb)))+str(img_nb)
+            sub_dir_nb = img_nb//MAX_FILES_PER_DIR
+            output_path = f'{self.images_output_dir}/{sub_dir_nb}/img_{image_number}-layer_{layer_id}.png'
+            return output_path
+        
+        def get_next_layer(input_image, component_path, output_path):
                 output_image = add_component(
                     base_image=input_image,
                     component_path=component_path,
                     output_image_size=self.image_size,
                     background=True,
-                    save=False
+                    save=True,
+                    output_path=output_path
                 )
                 prompt = get_class_from_path(component_path)
-                return input_image, output_image, prompt
+                return output_image, prompt
             
         rows = []
+        blank_image_path = f'{self.images_output_dir}/blank_image.png'
         blank_image = merge_composents(modules_paths=[],
                                     output_size=self.image_size,
-                                    save=False,
+                                    save=True,
+                                    output_path=blank_image_path,
                                     background=True)[0]
 
         arms_L = [f'{assets_dir}/Arm_L/{f}' for f in os.listdir(f'{assets_dir}/Arm_L') if f.endswith('.png')]
@@ -157,73 +166,109 @@ class NextTokenGenerator:
             leg_L = f'{assets_dir}/Leg_L/{tint}_leg.png'
             leg_R = f'{assets_dir}/Leg_R/{tint}_leg.png'
             # 1 Nothing -> Left Arm
-            input_image, output_image, prompt = get_next_layer(blank_image, arm_L)
-            rows.append([input_image, output_image, prompt])
+            input_image_path = blank_image_path
+            output_image_path = get_output_path(len(rows), 1)
+            output_image, prompt = get_next_layer(blank_image, arm_L, output_image_path)
+            rows.append([input_image_path, output_image_path, prompt])
             # 2 Left Arm -> Right Arm
-            input_image, output_image, prompt = get_next_layer(output_image, arm_R)
-            rows.append([input_image, output_image, prompt])
+            input_image_path = output_image_path
+            output_image_path = get_output_path(len(rows), 2)
+            output_image, prompt = get_next_layer(output_image, arm_R, output_image_path)
+            rows.append([input_image_path, output_image_path, prompt])
             # 3 Right Arm -> Neck
-            input_image, output_image, prompt = get_next_layer(output_image, neck)
-            rows.append([input_image, output_image, prompt])
+            input_image_path = output_image_path
+            output_image_path = get_output_path(len(rows), 3)
+            output_image, prompt = get_next_layer(output_image, neck, output_image_path)
+            rows.append([input_image_path, output_image_path, prompt])
             # 4 Neck -> Head
-            input_image, output_image, prompt = get_next_layer(output_image, head)
-            rows.append([input_image, output_image, prompt])
+            input_image_path = output_image_path
+            output_image_path = get_output_path(len(rows), 4)
+            output_image, prompt = get_next_layer(output_image, head, output_image_path)
+            rows.append([input_image_path, output_image_path, prompt])
             # 5 Head -> Hand_L
-            input_image, output_image, prompt = get_next_layer(output_image, hand_L)
-            rows.append([input_image, output_image, prompt])
+            input_image_path = output_image_path
+            output_image_path = get_output_path(len(rows), 5)
+            output_image, prompt = get_next_layer(output_image, hand_L, output_image_path)
+            rows.append([input_image_path, output_image_path, prompt])
             # 6 Hand_L -> Hand_R
-            input_image, output_image, prompt = get_next_layer(output_image, hand_R)
-            rows.append([input_image, output_image, prompt])
+            input_image_path = output_image_path
+            output_image_path = get_output_path(len(rows), 6)
+            output_image, prompt = get_next_layer(output_image, hand_R, output_image_path)
+            rows.append([input_image_path, output_image_path, prompt])
             for shirt in tqdm(shirts, desc='Shirts', position=1, leave=False):
                 # 7 Hand_R -> Shirt
-                input_image, output_image, prompt = get_next_layer(output_image, shirt)
-                rows.append([input_image, output_image, prompt])
+                input_image_path = output_image_path
+                output_image_path = get_output_path(len(rows), 7)
+                output_image, prompt = get_next_layer(output_image, shirt, output_image_path)
+                rows.append([input_image_path, output_image_path, prompt])
                 shirt_color = os.path.basename(shirt).split('_')[0][:-5]
                 shirts_L = [f'{assets_dir}/Shirt_L/{f}' for f in os.listdir(f'{assets_dir}/Shirt_L') if f.endswith('.png') and shirt_color in f]
                 for shirt_L in tqdm(shirts_L, desc='Sleeves and Legs', position=2, leave=False):
                     shirt_R = f'{assets_dir}/Shirt_R/{os.path.basename(shirt_L)}'
                     # 8 Shirt -> Shirt L
-                    input_image, output_image, prompt = get_next_layer(output_image, shirt_L)
-                    rows.append([input_image, output_image, prompt])
+                    input_image_path = output_image_path
+                    output_image_path = get_output_path(len(rows), 8)
+                    output_image, prompt = get_next_layer(output_image, shirt_L, output_image_path)
+                    rows.append([input_image_path, output_image_path, prompt])
                     # 9 Shirt_L -> Shirt R
-                    input_image, output_image, prompt = get_next_layer(output_image, shirt_R)
-                    rows.append([input_image, output_image, prompt])
+                    input_image_path = output_image_path
+                    output_image_path = get_output_path(len(rows), 9)
+                    output_image, prompt = get_next_layer(output_image, shirt_R, output_image_path)
+                    rows.append([input_image_path, output_image_path, prompt])
                     # 10 Shirt_R -> Leg_L
-                    input_image, output_image, prompt = get_next_layer(output_image, leg_L)
-                    rows.append([input_image, output_image, prompt])
+                    input_image_path = output_image_path
+                    output_image_path = get_output_path(len(rows), 10)
+                    output_image, prompt = get_next_layer(output_image, leg_L, output_image_path)
+                    rows.append([input_image_path, output_image_path, prompt])
                     # 11 Leg_L -> Leg_R
-                    input_image, output_image, prompt = get_next_layer(output_image, leg_R)
-                    rows.append([input_image, output_image, prompt])
+                    input_image_path = output_image_path
+                    output_image_path = get_output_path(len(rows), 11)
+                    output_image, prompt = get_next_layer(output_image, leg_R, output_image_path)
+                    rows.append([input_image_path, output_image_path, prompt])
                     for shoe_L in tqdm(shoes, desc='Shoes', position=3, leave=False):
                         shoe_R = f'{assets_dir}/Shoes_R/{os.path.basename(shoe_L)}'
                         # 12 Leg_R -> Shoe_L
-                        input_image, output_image, prompt = get_next_layer(output_image, shoe_L)
-                        rows.append([input_image, output_image, prompt])
+                        input_image_path = output_image_path
+                        output_image_path = get_output_path(len(rows), 12)
+                        output_image, prompt = get_next_layer(output_image, shoe_L, output_image_path)
+                        rows.append([input_image_path, output_image_path, prompt])
                         # 13 Shoe_L -> Shoe_R
-                        input_image, output_image, prompt = get_next_layer(output_image, shoe_R)
-                        rows.append([input_image, output_image, prompt])
+                        input_image_path = output_image_path
+                        output_image_path = get_output_path(len(rows), 13)
+                        output_image, prompt = get_next_layer(output_image, shoe_R, output_image_path)
+                        rows.append([input_image_path, output_image_path, prompt])
                         for pant_L in tqdm(pants_L, desc='Pants Legs', position=4, leave=False):
                             pant_R = f'{assets_dir}/Pants_R/{os.path.basename(pant_L)}'
                             pants_color = os.path.basename(pant_L).split('_')[0]
                             pants = [f'{assets_dir}/Pants/{f}' for f in os.listdir(f'{assets_dir}/Pants') if f.endswith('.png') and pants_color in f]
                             # 14 Shoe_R -> Pant_L
-                            input_image, output_image, prompt = get_next_layer(output_image, pant_L)
-                            rows.append([input_image, output_image, prompt])
+                            input_image_path = output_image_path
+                            output_image_path = get_output_path(len(rows), 14)
+                            output_image, prompt = get_next_layer(output_image, pant_L, output_image_path)
+                            rows.append([input_image_path, output_image_path, prompt])
                             # 15 Pant_L -> Pant_R
-                            input_image, output_image, prompt = get_next_layer(output_image, pant_R)
-                            rows.append([input_image, output_image, prompt])
+                            input_image_path = output_image_path
+                            output_image_path = get_output_path(len(rows), 15)
+                            output_image, prompt = get_next_layer(output_image, pant_R, output_image_path)
+                            rows.append([input_image_path, output_image_path, prompt])
                             for pant in tqdm(pants, desc='Pants', position=5, leave=False):
                                 # 16 Pant_R -> Pant
-                                input_image, output_image, prompt = get_next_layer(output_image, pant)
-                                rows.append([input_image, output_image, prompt])
+                                input_image_path = output_image_path
+                                output_image_path = get_output_path(len(rows), 16)
+                                output_image, prompt = get_next_layer(output_image, pant, output_image_path)
+                                rows.append([input_image_path, output_image_path, prompt])
                                 for face in tqdm(faces, desc='Face', position=6, leave=False):
                                     # 17 Pant -> Face
-                                    input_image, output_image, prompt = get_next_layer(output_image, face)
-                                    rows.append([input_image, output_image, prompt])
+                                    input_image_path = output_image_path
+                                    output_image_path = get_output_path(len(rows), 17)
+                                    output_image, prompt = get_next_layer(output_image, face, output_image_path)
+                                    rows.append([input_image_path, output_image_path, prompt])
                                     for hair in tqdm(hairs, desc='Hair', position=7, leave=False):
                                         # 18 Face -> Hair
-                                        input_image, output_image, prompt = get_next_layer(output_image, face)
-                                        rows.append([input_image, output_image, prompt])
+                                        input_image_path = output_image_path
+                                        output_image_path = get_output_path(len(rows), 18)
+                                        output_image, prompt = get_next_layer(output_image, hair, output_image_path)
+                                        rows.append([input_image_path, output_image_path, prompt])
         print(f'Saving the dataset (COMPLETE)')
         df = pd.DataFrame(rows, columns=['Input', 'Target', 'Prompt'])
         df.to_csv(self.dataset_path, index=False)
