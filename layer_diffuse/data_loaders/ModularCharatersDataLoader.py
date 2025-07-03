@@ -26,8 +26,8 @@ class ModularCharactersDataLoader(torch.utils.data.DataLoader):
             )
         
         def transform(rows:dict)->dict:
-            images_input = [preprocess(image) for image in rows['input']]
-            images_target = [preprocess(image) for image in rows['target']]
+            images_input = [preprocess(image.convert('RGB')) for image in rows['input']]
+            images_target = [preprocess(image.convert('RGB')) for image in rows['target']]
             class_labels = [torch.tensor(self.vocab.get(prompt,-1),dtype=torch.long).unsqueeze(0) for prompt in rows['prompt']]
             return {'input': images_input,
                     'target': images_target,
