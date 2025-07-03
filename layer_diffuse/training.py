@@ -13,8 +13,7 @@ def train_loop():
     val_split = f"train"
     train_split = f"train"
     parser = argparse.ArgumentParser(description="Train DDIMNextTokenV1 model.")
-    parser.add_argument(
-        "--model_version",
+    parser.add_argument("--model_version",
         type=str,
         default="DDIMNextTokenV1",
         choices=[
@@ -25,82 +24,69 @@ def train_loop():
         ],
         help="Model version to use for training",
     )
-    parser.add_argument(
-        "--train_size",
+    parser.add_argument("--train_size",
         type=int,
         default=16000,
         help="Number of training batches",
     )
-    parser.add_argument(
-        "--val_size",
+    parser.add_argument("--val_size",
         type=int,
         default=1600,
         help="Number of validation batches",
     )
-    parser.add_argument(
-        "--batch_size",
+    parser.add_argument("--batch_size",
         type=int,
         default=16,
         help="Batch size for training and validation",
     )
-    parser.add_argument(
-        "--dataset_name",
+    parser.add_argument("--dataset_name",
         type=str,
         default="QLeca/modular_characters_hairs_RGB",
         help="Dataset name to use for training",
     )
-    parser.add_argument(
-        "--num_epochs",
+    parser.add_argument("--num_epochs",
         type=int,
         default=50,
         help="Training epochs",
     )
-    parser.add_argument(
-        "--lr",
+    parser.add_argument("--lr",
         type=float,
         default=0.0002,
         help="Learning rate",
     )
-    parser.add_argument(
-        "--warming_steps",
+    parser.add_argument("--warming_steps",
         type=int,
         default=1000,
         help="Learning rate scheduler warming steps",
     )
-    parser.add_argument(
-        "--num_cycles",
+    parser.add_argument("--num_cycles",
         type=float,
         default=0.5,
         help="Number of cycles for the cosine learning rate scheduler",
     )
-    parser.add_argument(
-        "--train_tags",
+    parser.add_argument("--train_tags",
         type=str,
         nargs="*",
         default=None,
         help="Tags for the training run (optional, can be used for wandb tagging)",
     )
-    parser.add_argument(
-        "--gradient_accumulation_steps",
+    parser.add_argument("--gradient_accumulation_steps",
         type=int,
         default=4,
         help="Number of gradient accumulation steps (effectively multiplies batch size)",
     )
-    parser.add_argument(
-        "--mixed_precision",
+    parser.add_argument("--mixed_precision",
         type=str,
         default="fp16",
         choices=["no", "fp16", "bf16"],
         help="Mixed precision training mode",
     )
-    parser.add_argument(
-        "--dataloader_num_workers",
+    parser.add_argument("--dataloader_num_workers",
         type=int,
         default=4,
         help="Number of workers for data loading",
     )
-    parser.add_argument(
-        "--beta_schedule",
+    parser.add_argument("--beta_schedule",
         type=str,
         default="linear",
         choices=["linear", "scaled_linear", "squaredcos_cap_v2"],
