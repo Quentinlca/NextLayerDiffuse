@@ -17,6 +17,13 @@ def eval_loop():
     parser.add_argument('--epoch', type=int, default=49, help='Epoch number to load the model from')
     parser.add_argument('--num_inference_steps', type=int, default=1000, help='Number of inference steps for FID score calculation')
     parser.add_argument('--split', type=str, default='train', help='Dataset split to use for evaluation')
+    parser.add_argument(
+        "--beta_schedule",
+        type=str,
+        default="linear",
+        choices=["linear", "scaled_linear", "squaredcos_cap_v2"],
+        help="Beta schedule for the diffusion scheduler",
+    )
     
     args = parser.parse_args()
     batch_size = args.batch_size
@@ -32,6 +39,8 @@ def eval_loop():
     elif args.model_version == "DDPMNextTokenV3":
         pipeline = DDPMNextTokenV3.DDPMNextTokenV3Pipeline()
     else:
+        scheduler_config = DDIMNextTokenV1.SchedulerConfig()
+        scheduler_config.config['beta_schedule'] = args.beta_schedule
         pipeline = DDIMNextTokenV1.DDIMNextTokenV1Pipeline()
     
     # Initialize the DDPMNextTokenV1 pipeline
