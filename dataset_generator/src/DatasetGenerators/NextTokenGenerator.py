@@ -180,7 +180,7 @@ class NextTokenGenerator:
                 rows.append([input_image, output_image, prompt])
                 shirt_color = os.path.basename(shirt).split('_')[0][:-5]
                 shirts_L = [f'{assets_dir}/Shirt_L/{f}' for f in os.listdir(f'{assets_dir}/Shirt_L') if f.endswith('.png') and shirt_color in f]
-                for shirt_L in tqdm(shirts_L, desc='Sleeves and Legs'):
+                for shirt_L in tqdm(shirts_L, desc='Sleeves and Legs', position=2, leave=False):
                     shirt_R = f'{assets_dir}/Shirt_R/{os.path.basename(shirt_L)}'
                     # 8 Shirt -> Shirt L
                     input_image, output_image, prompt = get_next_layer(output_image, shirt_L)
@@ -194,7 +194,7 @@ class NextTokenGenerator:
                     # 11 Leg_L -> Leg_R
                     input_image, output_image, prompt = get_next_layer(output_image, leg_R)
                     rows.append([input_image, output_image, prompt])
-                    for shoe_L in tqdm(shoes, desc='Shoes', position=2, leave=False):
+                    for shoe_L in tqdm(shoes, desc='Shoes', position=3, leave=False):
                         shoe_R = f'{assets_dir}/Shoes_R/{os.path.basename(shoe_L)}'
                         # 12 Leg_R -> Shoe_L
                         input_image, output_image, prompt = get_next_layer(output_image, shoe_L)
@@ -202,7 +202,7 @@ class NextTokenGenerator:
                         # 13 Shoe_L -> Shoe_R
                         input_image, output_image, prompt = get_next_layer(output_image, shoe_R)
                         rows.append([input_image, output_image, prompt])
-                        for pant_L in tqdm(pants_L, desc='Pants', position=3, leave=False):
+                        for pant_L in tqdm(pants_L, desc='Pants', position=4, leave=False):
                             pant_R = f'{assets_dir}/Pants_R/{os.path.basename(pant_L)}'
                             pants_color = os.path.basename(pant_L).split('_')[0]
                             pants = [f'{assets_dir}/Pants/{f}' for f in os.listdir(f'{assets_dir}/Pants') if f.endswith('.png') and pants_color in f]
