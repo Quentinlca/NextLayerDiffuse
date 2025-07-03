@@ -147,7 +147,7 @@ class NextTokenGenerator:
         shirts_L = [f'{assets_dir}/Shirt_L/{f}' for f in os.listdir(f'{assets_dir}/Shirt_L') if f.endswith('.png')]
         shirts = [f'{assets_dir}/Shirt/{f}' for f in os.listdir(f'{assets_dir}/Shirt') if f.endswith('.png') and f.split('.')[0].split('_')[-1] == '1']
 
-        for arm_L in tqdm(arms_L, desc='Body'):
+        for arm_L in tqdm(arms_L, desc='Body', position=0, leave=True):
             tint = os.path.basename(arm_L).split('_')[0]
             head = f'{assets_dir}/Head/{tint}_head.png'
             arm_R = f'{assets_dir}/Arm_R/{tint}_arm.png'
@@ -174,7 +174,7 @@ class NextTokenGenerator:
             # 6 Hand_L -> Hand_R
             input_image, output_image, prompt = get_next_layer(output_image, hand_R)
             rows.append([input_image, output_image, prompt])
-            for shirt in tqdm(shirts, desc='Shirts'):
+            for shirt in tqdm(shirts, desc='Shirts', position=1, leave=False):
                 # 7 Hand_R -> Shirt
                 input_image, output_image, prompt = get_next_layer(output_image, shirt)
                 rows.append([input_image, output_image, prompt])
@@ -194,7 +194,7 @@ class NextTokenGenerator:
                     # 11 Leg_L -> Leg_R
                     input_image, output_image, prompt = get_next_layer(output_image, leg_R)
                     rows.append([input_image, output_image, prompt])
-                    for shoe_L in tqdm(shoes, desc='Shoes'):
+                    for shoe_L in tqdm(shoes, desc='Shoes', position=2, leave=False):
                         shoe_R = f'{assets_dir}/Shoes_R/{os.path.basename(shoe_L)}'
                         # 12 Leg_R -> Shoe_L
                         input_image, output_image, prompt = get_next_layer(output_image, shoe_L)
@@ -202,7 +202,7 @@ class NextTokenGenerator:
                         # 13 Shoe_L -> Shoe_R
                         input_image, output_image, prompt = get_next_layer(output_image, shoe_R)
                         rows.append([input_image, output_image, prompt])
-                        for pant_L in tqdm(pants_L, desc='Pants'):
+                        for pant_L in tqdm(pants_L, desc='Pants', position=3, leave=False):
                             pant_R = f'{assets_dir}/Pants_R/{os.path.basename(pant_L)}'
                             pants_color = os.path.basename(pant_L).split('_')[0]
                             pants = [f'{assets_dir}/Pants/{f}' for f in os.listdir(f'{assets_dir}/Pants') if f.endswith('.png') and pants_color in f]
