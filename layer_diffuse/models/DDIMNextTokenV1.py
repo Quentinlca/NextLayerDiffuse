@@ -52,9 +52,7 @@ class TrainingConfig:
     )
     backup_output_dir = "training_outputs/DDIMNextTokenV1_backup"  # the model name locally and on the HF Hub if push_to_hub fails
     push_to_hub = True  # whether to upload the saved model to the HF Hub
-    hub_model_id = (
-        "QLeca/DDIMNextTokenV1"  # the name of the repository to create on the HF Hub
-    )
+    hub_model_id = ""
     wandb_project_name = (
         "ddim-next-token-v1"  # the name of the project on Weights & Biases
     )
@@ -151,14 +149,27 @@ class DDIMNextTokenV1Pipeline:
 
         self.unet = UNet2DModel(**self.model_config.config).to(self.device)  # type: ignore
         self.scheduler = DDIMScheduler(**self.scheduler_config.config)
+        try:
+            wandb.login(
+                key=os.environ.get("WANDB_API_KEY")
+            )  # Ensure you have your WANDB_API_KEY set in your environment
+        except Exception as e:
+            print(
+                "Failed to login to Weights & Biases. Please ensure you have your WANDB_API_KEY set in your environment."
+            )
+            raise e
+        try:
+            huggingface_hub.login(
+                token=os.environ.get("HUGGINGFACE_HUB_TOKEN"), new_session=False
+            )  # Ensure you have your HUGGINGFACE_HUB_TOKEN set in your environment
+        except Exception as e:
+            print(
+                "Failed to login to Hugging Face Hub. Please ensure you have your HUGGINGFACE_HUB_TOKEN set in your environment."
+            )
+            raise e
 
-        wandb.login(
-            key=os.environ.get("WANDB_API_KEY")
-        )  # Ensure you have your WANDB_API_KEY set in your environment
-        huggingface_hub.login(
-            token=os.environ.get("HUGGINGFACE_HUB_TOKEN"), new_session=False
-        )  # Ensure you have your HUGGINGFACE_HUB_TOKEN set in your environment
-
+        self.train_config.hub_model_id = f"{huggingface_hub.whoami()['name']}/DDIMNextTokenV1"  # Set the hub model ID based on the username
+        
         if not os.path.exists(self.train_config.output_dir):
             os.makedirs(self.train_config.output_dir)
         if not huggingface_hub.repo_exists(self.train_config.hub_model_id):
