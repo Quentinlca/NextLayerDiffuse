@@ -132,35 +132,28 @@ def train_loop():
 
     # Initialize the DDPMNextTokenV1 pipeline
     if args.model_version == "DDPMNextTokenV1":
-        train_config = DDPMNextTokenV1.TrainingConfig()
+        pipeline = DDPMNextTokenV1.DDPMNextTokenV1Pipeline()
+        scheduler_config = DDPMNextTokenV1.SchedulerConfig()
     elif args.model_version == "DDPMNextTokenV2":
         pipeline = DDPMNextTokenV2.DDPMNextTokenV2Pipeline()
     elif args.model_version == "DDPMNextTokenV3":
         pipeline = DDPMNextTokenV3.DDPMNextTokenV3Pipeline()
     else:
-        pipeline = DDIMNextTokenV1.DDIMNextTokenV1Pipeline()
+        scheduler_config = DDIMNextTokenV1.SchedulerConfig()
+        scheduler_config.config['beta_schedule'] = beta_schedule
+        pipeline = DDIMNextTokenV1.DDIMNextTokenV1Pipeline(scheduler_config=scheduler_config)
     # Configure the training parameters (TODO: make this configurable)
     pipeline.train_config.train_batch_size = batch_size
     pipeline.train_config.eval_batch_size = batch_size
     pipeline.train_config.num_epochs = num_epochs
     pipeline.train_config.learning_rate = lr
     pipeline.train_config.lr_warmup_steps = warming_steps
-    pipeline.scheduler_config.config["beta_schedule"] = beta_schedule
 
     # Set performance optimizations
     if gradient_accumulation_steps > 1:
         pipeline.train_config.gradient_accumulation_steps = gradient_accumulation_steps
     if mixed_precision in ["fp16", "bf16"]:
         pipeline.train_config.mixed_precision = mixed_precision
-
-    if args.model_version == "DDPMNextTokenV1":
-        pipeline = DDPMNextTokenV1.DDPMNextTokenV1Pipeline()
-    elif args.model_version == "DDPMNextTokenV2":
-        pipeline = DDPMNextTokenV2.DDPMNextTokenV2Pipeline()
-    elif args.model_version == "DDPMNextTokenV3":
-        pipeline = DDPMNextTokenV3.DDPMNextTokenV3Pipeline()
-    else:
-        pipeline = DDIMNextTokenV1.DDIMNextTokenV1Pipeline()
 
     # Get the dataloaders for training and validation
     train_dataloader = ModularCharatersDataLoader.get_modular_char_dataloader(
