@@ -3,7 +3,7 @@ import torch.nn as nn
 import torch.nn.functional as F
 # Constants
 
-from constants import *
+WINDOW_SIZE = 8
 
 class ConvBlock(nn.Module):
     """Basic convolutional block with batch normalization and ReLU activation."""
@@ -144,6 +144,7 @@ class AutoregressiveCNNGenerator(nn.Module):
 
         self.encoder = Encoder(in_channels=4*WINDOW_SIZE)  # RGBA input (4 channels)
         self.decoder = Decoder(out_channels=4*WINDOW_SIZE)  # RGBA output (4 channels)
+        self.num_layers = 18  # Total number of layers to generate
         
     def forward(self, x):
         """
@@ -203,7 +204,7 @@ class AutoregressiveCNNGenerator(nn.Module):
         for i in range(1, num_layers):  # Start from 1 if we consider the seed as layer 0
             with torch.no_grad():
                 # Generate next layer
-                next_layer = self.forward(current_image, i-1)  # i-1 because we're predicting the next layer
+                next_layer = self.forward(current_image)  # i-1 because we're predicting the next layer
                 generated_layers.append(next_layer.squeeze(0))
                 current_image = next_layer
 
@@ -221,6 +222,7 @@ class AutoregressiveCNNGeneratorPrompt(nn.Module):
         
         self.encoder = Encoder(in_channels=4*WINDOW_SIZE)  # RGBA input (4 channels)
         self.decoder = Decoder(out_channels=4*WINDOW_SIZE)  # RGBA output (4 channels)
+        self.num_layers = 18  # Total number of layers to generate
         
     def forward(self, x):
         """
@@ -280,7 +282,7 @@ class AutoregressiveCNNGeneratorPrompt(nn.Module):
         for i in range(1, num_layers):  # Start from 1 if we consider the seed as layer 0
             with torch.no_grad():
                 # Generate next layer
-                next_layer = self.forward(current_image, i-1)  # i-1 because we're predicting the next layer
+                next_layer = self.forward(current_image)  # i-1 because we're predicting the next layer
                 generated_layers.append(next_layer.squeeze(0))
                 current_image = next_layer
 
