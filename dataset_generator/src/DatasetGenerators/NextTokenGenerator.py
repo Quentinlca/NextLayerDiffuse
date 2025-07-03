@@ -121,12 +121,12 @@ class NextTokenGenerator:
         df_batch.to_csv(self.dataset_path,index=False) 
         rows = []
         
-    def generate_dataset_smarter(self, assets_dir:str, output_image_size:int = 128):
+    def generate_dataset_smarter(self, assets_dir:str):
         def get_next_layer(input_image, component_path):
                 output_image = add_component(
                     base_image=input_image,
                     component_path=component_path,
-                    output_image_size=output_image_size,
+                    output_image_size=self.image_size,
                     background=True,
                     save=False
                 )
@@ -135,7 +135,7 @@ class NextTokenGenerator:
             
         rows = []
         blank_image = merge_composents(modules_paths=[],
-                                    output_size=output_image_size,
+                                    output_size=self.image_size,
                                     save=False,
                                     background=True)[0]
 
