@@ -9,6 +9,7 @@ import argparse
 
 
 def train_loop():
+    # Parsing
     val_split = f"train"
     train_split = f"train"
     parser = argparse.ArgumentParser(description="Train DDIMNextTokenV1 model.")
@@ -16,7 +17,12 @@ def train_loop():
         "--model_version",
         type=str,
         default="DDIMNextTokenV1",
-        choices=["DDPMNextTokenV1", "DDPMNextTokenV2", "DDPMNextTokenV3", "DDIMNextTokenV1"],
+        choices=[
+            "DDPMNextTokenV1",
+            "DDPMNextTokenV2",
+            "DDPMNextTokenV3",
+            "DDIMNextTokenV1",
+        ],
         help="Model version to use for training",
     )
     parser.add_argument(
@@ -70,7 +76,7 @@ def train_loop():
     parser.add_argument(
         "--train_tags",
         type=str,
-        nargs='*',
+        nargs="*",
         default=None,
         help="Tags for the training run (optional, can be used for wandb tagging)",
     )
@@ -93,6 +99,13 @@ def train_loop():
         default=4,
         help="Number of workers for data loading",
     )
+    parser.add_argument(
+        "--beta_schedule",
+        type=str,
+        default="linear",
+        choices=["linear", "scaled_linear", "squaredcos_cap_v2"],
+        help="Beta schedule for the diffusion scheduler",
+    )
 
     args = parser.parse_args()
     # get the training and validation sizes from the command line arguments
@@ -108,6 +121,7 @@ def train_loop():
     gradient_accumulation_steps = args.gradient_accumulation_steps
     mixed_precision = args.mixed_precision
     dataloader_num_workers = args.dataloader_num_workers
+    beta_schedule = args.beta_schedule
     extra_kwargs = {
         "num_cycles": num_cycles,  # Pass the num_cycles parameter
         "train_tags": train_tags,  # Pass the train_tags parameter
@@ -115,10 +129,10 @@ def train_loop():
         "mixed_precision": mixed_precision,
         "dataloader_num_workers": dataloader_num_workers,
     }
-    
+
     # Initialize the DDPMNextTokenV1 pipeline
     if args.model_version == "DDPMNextTokenV1":
-        pipeline = DDPMNextTokenV1.DDPMNextTokenV1Pipeline()
+        train_config = DDPMNextTokenV1.TrainingConfig()
     elif args.model_version == "DDPMNextTokenV2":
         pipeline = DDPMNextTokenV2.DDPMNextTokenV2Pipeline()
     elif args.model_version == "DDPMNextTokenV3":
@@ -131,12 +145,22 @@ def train_loop():
     pipeline.train_config.num_epochs = num_epochs
     pipeline.train_config.learning_rate = lr
     pipeline.train_config.lr_warmup_steps = warming_steps
-    
+    pipeline.scheduler_config.config["beta_schedule"] = beta_schedule
+
     # Set performance optimizations
     if gradient_accumulation_steps > 1:
         pipeline.train_config.gradient_accumulation_steps = gradient_accumulation_steps
     if mixed_precision in ["fp16", "bf16"]:
         pipeline.train_config.mixed_precision = mixed_precision
+
+    if args.model_version == "DDPMNextTokenV1":
+        pipeline = DDPMNextTokenV1.DDPMNextTokenV1Pipeline()
+    elif args.model_version == "DDPMNextTokenV2":
+        pipeline = DDPMNextTokenV2.DDPMNextTokenV2Pipeline()
+    elif args.model_version == "DDPMNextTokenV3":
+        pipeline = DDPMNextTokenV3.DDPMNextTokenV3Pipeline()
+    else:
+        pipeline = DDIMNextTokenV1.DDIMNextTokenV1Pipeline()
 
     # Get the dataloaders for training and validation
     train_dataloader = ModularCharatersDataLoader.get_modular_char_dataloader(
@@ -165,7 +189,7 @@ def train_loop():
         val_dataloader=val_dataloader,
         train_size=train_size,
         val_size=val_size,
-        **extra_kwargs  # Pass all extra parameters through
+        **extra_kwargs,  # Pass all extra parameters through
     )
 
 
