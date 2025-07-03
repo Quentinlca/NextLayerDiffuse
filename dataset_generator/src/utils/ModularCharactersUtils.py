@@ -198,10 +198,12 @@ def merge_composents(
 def add_component(
     base_image: Image.Image,
     component_path: str,
-    output_path: str,
+    output_path: str | None = None,
     output_image_size: int = 128,
     background: bool = True,
+    save: bool = False
 ) -> Image.Image:
+    
     component_image = Image.open(component_path)
     blank = Image.new("RGBA", (IMAGE_SIZE, IMAGE_SIZE), (0, 0, 0, 0))
 
@@ -214,10 +216,9 @@ def add_component(
     blank.alpha_composite(component_image, (x_offset, y_offset))
 
     component_image = blank.resize((output_image_size, output_image_size))
-    base_image.paste(component_image, mask=component_image.split()[3])
-    result_image = base_image
-    if not os.path.exists(os.path.dirname(output_path)):
-        os.makedirs(os.path.dirname(output_path))
+    result_image = base_image.copy()
+    result_image.paste(component_image, mask=component_image.split()[3])
+    
     if background and result_image.mode == "RGBA":
         # Convert RGBA to RGB with white background
         rgb_image = Image.new("RGB", result_image.size, (255, 255, 255))
@@ -225,7 +226,14 @@ def add_component(
             result_image, mask=result_image.split()[3]
         )  # Use alpha channel as mask
         result_image = rgb_image
-    result_image.save(output_path)
+    if save and output_path:
+        if not os.path.exists(os.path.dirname(output_path)):
+            os.makedirs(os.path.dirname(output_path))
+        try:
+            result_image.save(output_path)
+        except Exception as e:
+            print(f"Error saving image {output_path}: {e}")
+            save = False
     return result_image
 
 
