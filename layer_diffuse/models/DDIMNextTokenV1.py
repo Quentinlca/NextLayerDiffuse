@@ -123,17 +123,32 @@ class SchedulerConfig(dict):
 
 
 class DDIMNextTokenV1Pipeline:
-    def __init__(self):
+    def __init__(
+        self,
+        train_config: TrainingConfig | None = None,
+        model_config: ModelConfig | None = None,
+        scheduler_config: SchedulerConfig | None = None,
+        inference_config: InferenceConfig | None = None,
+    ):
         # Initialize the training and model configurations
         self.device = (
             torch.device("cuda") if torch.cuda.is_available() else torch.device("cpu")
         )
         self.train_id = ""
         self.model_version = ""
-        self.train_config = TrainingConfig()
-        self.model_config = ModelConfig()
-        self.scheduler_config = SchedulerConfig()
-        self.inference_config = InferenceConfig()
+
+        # Set the configurations
+        self.train_config = (
+            train_config if train_config is not None else TrainingConfig()
+        )
+        self.model_config = model_config if model_config is not None else ModelConfig()
+        self.scheduler_config = (
+            scheduler_config if scheduler_config is not None else SchedulerConfig()
+        )
+        self.inference_config = (
+            inference_config if inference_config is not None else InferenceConfig()
+        )
+
         self.unet = UNet2DModel(**self.model_config.config).to(self.device)  # type: ignore
         self.scheduler = DDIMScheduler(**self.scheduler_config.config)
 
