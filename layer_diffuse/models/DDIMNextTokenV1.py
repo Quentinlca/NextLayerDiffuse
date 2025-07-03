@@ -64,9 +64,9 @@ class TrainingConfig:
 
     def get_dict(self):
         return {
-            attributes: getattr(self, attributes)
-            for attributes in dir(self)
-            if not attributes.startswith("__")
+            attribute: getattr(self, attribute)
+            for attribute in dir(self)
+            if not attribute.startswith("__") and not callable(getattr(self, attribute))
         }
 
 
@@ -76,9 +76,9 @@ class InferenceConfig:
 
     def get_dict(self):
         return {
-            attributes: getattr(self, attributes)
-            for attributes in dir(self)
-            if not attributes.startswith("__")
+            attribute: getattr(self, attribute)
+            for attribute in dir(self)
+            if not attribute.startswith("__") and not callable(getattr(self, attribute))
         }
 
 
