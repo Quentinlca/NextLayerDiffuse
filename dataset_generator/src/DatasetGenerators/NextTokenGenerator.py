@@ -202,7 +202,7 @@ class NextTokenGenerator:
                         # 13 Shoe_L -> Shoe_R
                         input_image, output_image, prompt = get_next_layer(output_image, shoe_R)
                         rows.append([input_image, output_image, prompt])
-                        for pant_L in tqdm(pants_L, desc='Pants', position=4, leave=False):
+                        for pant_L in tqdm(pants_L, desc='Pants Legs', position=4, leave=False):
                             pant_R = f'{assets_dir}/Pants_R/{os.path.basename(pant_L)}'
                             pants_color = os.path.basename(pant_L).split('_')[0]
                             pants = [f'{assets_dir}/Pants/{f}' for f in os.listdir(f'{assets_dir}/Pants') if f.endswith('.png') and pants_color in f]
@@ -212,22 +212,21 @@ class NextTokenGenerator:
                             # 15 Pant_L -> Pant_R
                             input_image, output_image, prompt = get_next_layer(output_image, pant_R)
                             rows.append([input_image, output_image, prompt])
-                            for pant in pants:
+                            for pant in tqdm(pants, desc='Pants', position=5, leave=False):
                                 # 16 Pant_R -> Pant
                                 input_image, output_image, prompt = get_next_layer(output_image, pant)
                                 rows.append([input_image, output_image, prompt])
-                                for hair in hairs:
-                                    # 17 Pant -> Hair
-                                    input_image, output_image, prompt = get_next_layer(output_image, hair)
+                                for face in tqdm(faces, desc='Face', position=6, leave=False):
+                                    # 17 Pant -> Face
+                                    input_image, output_image, prompt = get_next_layer(output_image, face)
                                     rows.append([input_image, output_image, prompt])
-                                    for face in faces:
-                                        # 18 Hair -> Face
+                                    for hair in tqdm(hairs, desc='Hair', position=7, leave=False):
+                                        # 18 Face -> Hair
                                         input_image, output_image, prompt = get_next_layer(output_image, face)
                                         rows.append([input_image, output_image, prompt])
-
-            df_batch = pd.DataFrame(rows, columns=['Input', 'Target', 'Prompt'])
-            df_batch.to_csv(self.dataset_path, index=False)
-            # TOTAL 6 layers * 8 colors tokens + 8*8 shirts + 64 * 3 variations * 2 layers + 384 * 2 legs = 
+        print(f'Saving the dataset (COMPLETE)')
+        df = pd.DataFrame(rows, columns=['Input', 'Target', 'Prompt'])
+        df.to_csv(self.dataset_path, index=False)
 
     @staticmethod
     def get_output_path(char_id:int, layer_id:int, sequence_lenght:int, output_dir:str)->str:
