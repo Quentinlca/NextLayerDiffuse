@@ -92,7 +92,7 @@ class ModularCharactersDataLoader(torch.utils.data.DataLoader):
 
         if isinstance(dataset, IterableDataset):
             dataset = dataset.map(transform, batched=True) # type: ignore
-            dataset = ShuffleDataset(dataset, buffer_size=batch_size) if shuffle else dataset
+            dataset = ShuffleDataset(dataset, buffer_size=1024) if shuffle else dataset
             return super().__init__(dataset,  # type: ignore
                                 batch_size=batch_size,
                                 num_workers=num_workers,
