@@ -105,10 +105,17 @@ def train_loop():
         help="Beta schedule for the diffusion scheduler",
     )
     parser.add_argument("--stream_dataset",
-        type=bool,
-        default=False,
+        action=argparse.BooleanOptionalAction,
+        default=True,
         help="To stream the dataset or not (default: False, for large datasets)",
     )
+    parser.add_argument("--vocab_file",
+        type=str,
+        default="",
+        help="Path to the vocabulary file (default: 'vocab.json')",
+    )
+    
+    
 
     args = parser.parse_args()
     # get the training and validation sizes from the command line arguments
@@ -119,6 +126,15 @@ def train_loop():
     batch_size = args.batch_size
     dataset_name = args.dataset_name
     stream_dataset = args.stream_dataset
+    vocab = {}
+    if args.vocab_file:
+        # Load the vocabulary from the specified file
+        import json
+        try:
+            with open(args.vocab_file, 'r') as f:
+                vocab = json.load(f)
+        except FileNotFoundError:
+            raise FileNotFoundError(f"Vocabulary file '{args.vocab_file}' not found.")
     
     num_epochs = args.num_epochs
     lr = args.lr
@@ -183,6 +199,7 @@ def train_loop():
         persistent_workers=True if dataloader_num_workers > 0 else False,
         streaming=stream_dataset,
         conversionRGBA=True,
+        vocab=vocab,  # Pass the vocabulary if provided
     )
     val_dataloader = ModularCharatersDataLoader.get_modular_char_dataloader(
         dataset_name=dataset_name,
@@ -195,6 +212,7 @@ def train_loop():
         persistent_workers=True if dataloader_num_workers > 0 else False,
         streaming=stream_dataset,
         conversionRGBA=True,
+        vocab=vocab,  # Pass the vocabulary if provided
     )
     # Start the training process
     pipeline.train_accelerate(

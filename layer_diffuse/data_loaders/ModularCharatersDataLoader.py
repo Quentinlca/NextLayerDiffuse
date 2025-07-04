@@ -5,17 +5,29 @@ import os
 from PIL import Image
 
 class ModularCharactersDataLoader(torch.utils.data.DataLoader):
-    def __init__(self, dataset_name:str, split:str, image_size:int, batch_size:int=16, shuffle:bool=True, 
-                 num_workers:int=0, pin_memory:bool=False, persistent_workers:bool=False, conversionRGBA:bool=False, streaming:bool=False):
+    def __init__(self, dataset_name:str, 
+                 split:str, 
+                 image_size:int, 
+                 batch_size:int=16, 
+                 shuffle:bool=True, 
+                 num_workers:int=0, 
+                 pin_memory:bool=False, 
+                 persistent_workers:bool=False, 
+                 conversionRGBA:bool=False, 
+                 streaming:bool=False,
+                 vocab:dict={}):
         if not os.path.exists('cache/datasets'):
             os.makedirs('cache/datasets', exist_ok=True)
         dataset = load_dataset(dataset_name, split=split, cache_dir='cache/datasets', streaming=streaming)
         self.dataset_name = dataset_name
         self.split = split
-        vocab = dataset['prompt'] # type: ignore
-        vocab = list(dict.fromkeys(dataset['prompt'])) # type: ignore
-        vocab = sorted(vocab) # type: ignore
-        self.vocab = dict(zip(vocab, range(len(vocab))))
+        if not vocab:
+            vocab = dataset['prompt'] # type: ignore
+            vocab = list(dict.fromkeys(dataset['prompt'])) # type: ignore
+            vocab = sorted(vocab) # type: ignore
+            self.vocab = dict(zip(vocab, range(len(vocab))))
+        else:
+            self.vocab = vocab
         
         preprocess = transforms.Compose(
                 [
@@ -52,8 +64,17 @@ class ModularCharactersDataLoader(torch.utils.data.DataLoader):
                                 pin_memory=pin_memory,
                                 persistent_workers=persistent_workers)
         
-def get_modular_char_dataloader(dataset_name:str, split:str, image_size:int, batch_size:int=16, shuffle:bool=True,
-                               num_workers:int=0, pin_memory:bool=False, persistent_workers:bool=False, streaming:bool=False, conversionRGBA:bool=False):
+def get_modular_char_dataloader(dataset_name:str, 
+                                split:str, 
+                                image_size:int, 
+                                batch_size:int=16, 
+                                shuffle:bool=True,
+                                num_workers:int=0, 
+                                pin_memory:bool=False, 
+                                persistent_workers:bool=False, 
+                                streaming:bool=False, 
+                                conversionRGBA:bool=False, 
+                                vocab:dict={}):
     return ModularCharactersDataLoader(dataset_name=dataset_name,
                                        split=split,
                                        image_size=image_size,
@@ -63,4 +84,5 @@ def get_modular_char_dataloader(dataset_name:str, split:str, image_size:int, bat
                                        pin_memory=pin_memory,
                                        persistent_workers=persistent_workers,
                                        streaming=streaming,
-                                       conversionRGBA=conversionRGBA)
+                                       conversionRGBA=conversionRGBA,
+                                       vocab=vocab)
