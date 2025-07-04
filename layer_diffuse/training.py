@@ -26,7 +26,7 @@ def train_loop():
     )
     parser.add_argument("--model_version",
         type=str,
-        default="DDIMNextTokenV1",
+        default="DDIMNextTokenV1_Refactored",
         choices=[
             "DDPMNextTokenV1",
             "DDPMNextTokenV2",
