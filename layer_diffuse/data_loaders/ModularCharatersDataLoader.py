@@ -1,5 +1,6 @@
 import torch
 from datasets import load_dataset
+from datasets.iterable_dataset import IterableDataset
 from torchvision import transforms
 import os
 from PIL import Image
@@ -55,14 +56,23 @@ class ModularCharactersDataLoader(torch.utils.data.DataLoader):
             return {'input': images_input,
                     'target': images_target,
                     'label': class_labels}
-        dataset.set_transform(transform) # type: ignore
-        
-        return super().__init__(dataset,  # type: ignore
+
+        if isinstance(dataset, IterableDataset):
+            dataset = dataset.map(transform, batched=True) # type: ignore
+            return super().__init__(dataset,  # type: ignore
                                 batch_size=batch_size,
-                                shuffle=shuffle,
                                 num_workers=num_workers,
                                 pin_memory=pin_memory,
                                 persistent_workers=persistent_workers)
+        else:
+            dataset.set_transform(transform) # type: ignore
+        
+            return super().__init__(dataset,  # type: ignore
+                                    batch_size=batch_size,
+                                    shuffle=shuffle,
+                                    num_workers=num_workers,
+                                    pin_memory=pin_memory,
+                                    persistent_workers=persistent_workers)
         
 def get_modular_char_dataloader(dataset_name:str, 
                                 split:str, 
