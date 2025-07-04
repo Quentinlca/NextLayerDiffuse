@@ -1,9 +1,42 @@
 import torch
 from datasets import load_dataset
 from datasets.iterable_dataset import IterableDataset
+from typing import Iterator, Any
 from torchvision import transforms
 import os
 from PIL import Image
+from numpy import random
+
+class ShuffleDataset(torch.utils.data.IterableDataset):
+    def __init__(self, dataset, buffer_size):
+        super().__init__()
+        self.dataset = dataset
+        self.buffer_size = buffer_size
+
+    def __iter__(self) -> Iterator[Any]:
+        shufbuf = []
+        dataset_iter = None
+        try:
+            dataset_iter = iter(self.dataset)
+            for i in range(self.buffer_size):
+                shufbuf.append(next(dataset_iter))
+        except:
+            self.buffer_size = len(shufbuf)
+
+        try:
+            while True:
+                try:
+                    if dataset_iter is not None:
+                        item = next(dataset_iter)
+                        evict_idx = random.randint(0, self.buffer_size - 1)
+                        yield shufbuf[evict_idx]
+                        shufbuf[evict_idx] = item
+                except StopIteration:
+                    break
+            while len(shufbuf) > 0:
+                yield shufbuf.pop()
+        except GeneratorExit:
+            pass
 
 class ModularCharactersDataLoader(torch.utils.data.DataLoader):
     def __init__(self, dataset_name:str, 
@@ -59,6 +92,7 @@ class ModularCharactersDataLoader(torch.utils.data.DataLoader):
 
         if isinstance(dataset, IterableDataset):
             dataset = dataset.map(transform, batched=True) # type: ignore
+            dataset = ShuffleDataset(dataset, buffer_size=batch_size) if shuffle else dataset
             return super().__init__(dataset,  # type: ignore
                                 batch_size=batch_size,
                                 num_workers=num_workers,

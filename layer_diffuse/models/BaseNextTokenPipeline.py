@@ -204,10 +204,10 @@ class BaseNextTokenPipeline(ABC):
         if num_inference_steps == 0:
             num_inference_steps = self.inference_config.num_inference_steps
 
-        random_sample_idx = torch.randint(
-            0, len(dataloader.dataset), (self.train_config.sample_size,), device=self.device, generator=generator
-        )  # type: ignore
-        random_sample = dataloader.dataset[random_sample_idx]
+        # random_sample_idx = torch.randint(
+        #     0, len(dataloader.dataset), (self.train_config.sample_size,), device=self.device, generator=generator
+        # )  # type: ignore
+        random_sample = dataloader.dataset[0: self.train_config.sample_size]
 
         input_images = torch.stack(random_sample["input"])
         target_images = torch.stack(random_sample["target"])
@@ -407,7 +407,7 @@ class BaseNextTokenPipeline(ABC):
 
             # Training loop
             progress_bar = tqdm(
-                total=len(train_dataloader),
+                total=train_size,
                 disable=not accelerator.is_local_main_process,
                 unit="batch",
             )
