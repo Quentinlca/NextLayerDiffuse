@@ -104,6 +104,11 @@ def train_loop():
         choices=["linear", "scaled_linear", "squaredcos_cap_v2"],
         help="Beta schedule for the diffusion scheduler",
     )
+    parser.add_argument("--stream_dataset",
+        type=bool,
+        default=False,
+        help="To stream the dataset or not (default: False, for large datasets)",
+    )
 
     args = parser.parse_args()
     # get the training and validation sizes from the command line arguments
@@ -113,6 +118,7 @@ def train_loop():
     val_size = args.val_size
     batch_size = args.batch_size
     dataset_name = args.dataset_name
+    stream_dataset = args.stream_dataset
     
     num_epochs = args.num_epochs
     lr = args.lr
@@ -175,6 +181,8 @@ def train_loop():
         num_workers=dataloader_num_workers,
         pin_memory=True,
         persistent_workers=True if dataloader_num_workers > 0 else False,
+        streaming=stream_dataset,
+        conversionRGBA=True,
     )
     val_dataloader = ModularCharatersDataLoader.get_modular_char_dataloader(
         dataset_name=dataset_name,
@@ -185,6 +193,8 @@ def train_loop():
         num_workers=dataloader_num_workers,
         pin_memory=True,
         persistent_workers=True if dataloader_num_workers > 0 else False,
+        streaming=stream_dataset,
+        conversionRGBA=True,
     )
     # Start the training process
     pipeline.train_accelerate(
