@@ -374,36 +374,36 @@ class BaseNextTokenPipeline(ABC):
                     print("Failed to reset parameters. Training may be unstable.")
 
             # Take a random subset of the training dataset of size train_size
-            if train_size is not None and train_size < len(train_dataloader.dataset):  # type: ignore
-                indices = torch.randperm(
-                    len(train_dataloader.dataset),  # type: ignore
-                    generator=random_generator,
-                    device=self.device,
-                )[:train_size]
-                subset = torch.utils.data.Subset(train_dataloader.dataset, indices)  # type: ignore
-                train_dataloader = torch.utils.data.DataLoader(
-                    subset,
-                    batch_size=self.train_config.train_batch_size,
-                    shuffle=True,
-                    num_workers=getattr(train_dataloader, "num_workers", 0),
-                    pin_memory=getattr(train_dataloader, "pin_memory", False),
-                    drop_last=getattr(train_dataloader, "drop_last", False),
-                )
-            if val_size is not None and val_size < len(val_dataloader.dataset):  # type: ignore
-                indices = torch.randperm(
-                    len(val_dataloader.dataset),  # type: ignore
-                    generator=random_generator,
-                    device=self.device,
-                )[:val_size]
-                subset = torch.utils.data.Subset(val_dataloader.dataset, indices)  # type: ignore
-                val_dataloader = torch.utils.data.DataLoader(
-                    subset,
-                    batch_size=self.train_config.eval_batch_size,
-                    shuffle=False,
-                    num_workers=getattr(val_dataloader, "num_workers", 0),
-                    pin_memory=getattr(val_dataloader, "pin_memory", False),
-                    drop_last=getattr(val_dataloader, "drop_last", False),
-                )
+            # if train_size is not None and train_size < len(train_dataloader.dataset):  # type: ignore
+            #     indices = torch.randperm(
+            #         len(train_dataloader.dataset),  # type: ignore
+            #         generator=random_generator,
+            #         device=self.device,
+            #     )[:train_size]
+            #     subset = torch.utils.data.Subset(train_dataloader.dataset, indices)  # type: ignore
+            #     train_dataloader = torch.utils.data.DataLoader(
+            #         subset,
+            #         batch_size=self.train_config.train_batch_size,
+            #         shuffle=True,
+            #         num_workers=getattr(train_dataloader, "num_workers", 0),
+            #         pin_memory=getattr(train_dataloader, "pin_memory", False),
+            #         drop_last=getattr(train_dataloader, "drop_last", False),
+            #     )
+            # if val_size is not None and val_size < len(val_dataloader.dataset):  # type: ignore
+            #     indices = torch.randperm(
+            #         len(val_dataloader.dataset),  # type: ignore
+            #         generator=random_generator,
+            #         device=self.device,
+            #     )[:val_size]
+            #     subset = torch.utils.data.Subset(val_dataloader.dataset, indices)  # type: ignore
+            #     val_dataloader = torch.utils.data.DataLoader(
+            #         subset,
+            #         batch_size=self.train_config.eval_batch_size,
+            #         shuffle=False,
+            #         num_workers=getattr(val_dataloader, "num_workers", 0),
+            #         pin_memory=getattr(val_dataloader, "pin_memory", False),
+            #         drop_last=getattr(val_dataloader, "drop_last", False),
+            #     )
 
             # Training loop
             progress_bar = tqdm(
@@ -415,6 +415,8 @@ class BaseNextTokenPipeline(ABC):
             self.unet.train()
             
             for step, batch in enumerate(train_dataloader):
+                if step >= train_size:
+                    break
                 input_images = batch["input"].to(self.device)
                 target_images = batch["target"].to(self.device)
                 class_labels = batch["label"].to(self.device)
@@ -527,7 +529,9 @@ class BaseNextTokenPipeline(ABC):
             with torch.no_grad():
                 val_loss = 0.0
                 self.unet.eval()
-                for batch in tqdm(val_dataloader, desc="Evaluating", unit="batch"):
+                for step,batch in tqdm(enumerate(val_dataloader), desc="Evaluating", unit="batch"):
+                    if step >= val_size:
+                        break
                     input_images = batch["input"].to(self.device)
                     target_images = batch["target"].to(self.device)
                     class_labels = batch["label"].to(self.device)
@@ -550,7 +554,7 @@ class BaseNextTokenPipeline(ABC):
                     noise_pred = self._forward_unet(input_images, noisy_targets, timesteps, class_labels)
                     loss = F.mse_loss(noise_pred, noise)
                     val_loss += loss.item()
-                val_loss /= len(val_dataloader)
+                val_loss /= val_size
                 logs = {"val_loss": val_loss, "step": global_step, "epoch": epoch}
                 if self.train_config.FID_eval_steps > 0 and (epoch + 1) % self.train_config.FID_eval_steps == 0:
                     FID_score = self.get_FID_score(
