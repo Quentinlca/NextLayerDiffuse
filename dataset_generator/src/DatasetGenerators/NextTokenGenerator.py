@@ -158,11 +158,7 @@ class NextTokenGenerator:
 
         base0_image = blank_image
         base0_image_path = blank_image_path
-        i = 0
         for arm_L in tqdm(arms_L, desc='Body', position=0, leave=True):
-            if i>1:
-                return rows
-            i += 1
             tint = os.path.basename(arm_L).split('_')[0]
             head = f'{assets_dir}/Head/{tint}_head.png'
             arm_R = f'{assets_dir}/Arm_R/{tint}_arm.png'
