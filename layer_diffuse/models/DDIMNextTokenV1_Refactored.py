@@ -77,6 +77,15 @@ class DDIMNextTokenV1PipelineRefactored(BaseNextTokenPipeline):
     def _create_unet_from_pretrained(self, model_dir: str):
         return UNet2DModel.from_pretrained(model_dir).to(self.device)  # type: ignore
 
+    def _forward_unet(self, input_images: torch.Tensor, noisy_targets: torch.Tensor, 
+                     timesteps: torch.Tensor, class_labels: torch.Tensor) -> torch.Tensor:
+        noisy_samples = torch.concat([input_images, noisy_targets], dim=1)
+        return self.unet.forward(
+            sample=noisy_samples,
+            timestep=timesteps,
+            class_labels=class_labels,
+        ).sample # type: ignore
+    
     @torch.no_grad()
     def __call__(
         self,
