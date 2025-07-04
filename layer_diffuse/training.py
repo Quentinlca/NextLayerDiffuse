@@ -1,7 +1,10 @@
-from models import DDPMNextTokenV1
-from models import DDPMNextTokenV2
-from models import DDPMNextTokenV3
-from models import DDIMNextTokenV1
+from models import (
+    DDPMNextTokenV1,
+    DDPMNextTokenV2,
+    DDPMNextTokenV3,
+    DDIMNextTokenV1,
+    DDIMNextTokenV1_Refactored
+)
 
 
 from data_loaders import ModularCharatersDataLoader
@@ -29,6 +32,7 @@ def train_loop():
             "DDPMNextTokenV2",
             "DDPMNextTokenV3",
             "DDIMNextTokenV1",
+            "DDIMNextTokenV1_Refactored"
         ],
         help="Model version to use for training",
     )
@@ -138,10 +142,17 @@ def train_loop():
         pipeline = DDPMNextTokenV2.DDPMNextTokenV2Pipeline()
     elif args.model_version == "DDPMNextTokenV3":
         pipeline = DDPMNextTokenV3.DDPMNextTokenV3Pipeline()
-    else:
+    elif args.model_version == "DDIMNextTokenV1":
         scheduler_config = DDIMNextTokenV1.SchedulerConfig()
         scheduler_config.config['beta_schedule'] = beta_schedule
         pipeline = DDIMNextTokenV1.DDIMNextTokenV1Pipeline(scheduler_config=scheduler_config)
+    elif args.model_version == "DDIMNextTokenV1_Refactored":
+        # Use the refactored version of DDIMNextTokenV1
+        scheduler_config = DDIMNextTokenV1_Refactored.DDIMSchedulerConfig()
+        scheduler_config.config['beta_schedule'] = beta_schedule        
+        pipeline = DDIMNextTokenV1_Refactored.DDIMNextTokenV1PipelineRefactored(scheduler_config=scheduler_config)
+    else:
+        raise ValueError(f"Unknown model version: {args.model_version}")
     pipeline.train_config.train_batch_size = batch_size
     pipeline.train_config.eval_batch_size = batch_size
     pipeline.train_config.num_epochs = num_epochs
