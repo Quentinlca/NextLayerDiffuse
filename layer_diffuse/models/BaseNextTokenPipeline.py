@@ -32,24 +32,25 @@ IMAGE_SIZE = 128
 @dataclass
 class BaseTrainingConfig:
     image_size = IMAGE_SIZE  # the generated image resolution
-    train_batch_size = 16
+    train_batch_size = 32
     eval_batch_size = 16  # how many images to sample during evaluation
     sample_size = 8  # how many images to sample during training
     num_epochs = 50
-    gradient_accumulation_steps = 1
-    learning_rate = 1e-5
-    lr_warmup_steps = 100
+    gradient_accumulation_steps = 4
+    learning_rate = 2e-4
+    lr_warmup_steps = 125
     save_image_epochs = 1
     save_model_epochs = 3
+    seed = 0
+    train_size = 128000
+    val_size = 32000
     mixed_precision = "fp16"  # `no` for float32, `fp16` for automatic mixed precision
     output_dir = ""  # to be set by subclasses
     backup_output_dir = ""  # to be set by subclasses
     push_to_hub = True  # whether to upload the saved model to the HF Hub
     hub_model_id = ""  # to be set by subclasses
     wandb_project_name = ""  # to be set by subclasses
-    seed = 0
-    train_size = 16000
-    val_size = 16000
+    FID_eval_steps = 5
 
     def get_dict(self):
         return {
@@ -360,7 +361,7 @@ class BaseNextTokenPipeline(ABC):
         random_generator = torch.Generator(
             device=self.device
         )  # For the dataset sampling
-        
+        random_generator.manual_seed(self.train_config.seed)
         for epoch in range(self.train_config.num_epochs):
             # Check for NaN values in model parameters at the start of each epoch
             if self.check_model_for_nan():
@@ -551,8 +552,15 @@ class BaseNextTokenPipeline(ABC):
                     val_loss += loss.item()
                 val_loss /= len(val_dataloader)
                 logs = {"val_loss": val_loss, "step": global_step, "epoch": epoch}
+                if self.train_config.FID_eval_steps > 0 and (epoch + 1) % self.train_config.FID_eval_steps == 0:
+                    FID_score = self.get_FID_score(
+                        dataloader=val_dataloader,
+                        num_inference_steps=self.inference_config.num_inference_steps,
+                    )
+                    logs["FID_score"] = FID_score
                 wandb.log(logs)
                 accelerator.log(logs, step=global_step)
+                
 
             # Saving the model and images
             if accelerator.is_main_process:
