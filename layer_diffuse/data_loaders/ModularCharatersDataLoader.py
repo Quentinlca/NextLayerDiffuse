@@ -2,10 +2,11 @@ import torch
 from datasets import load_dataset
 from torchvision import transforms
 import os
+from PIL import Image
 
 class ModularCharactersDataLoader(torch.utils.data.DataLoader):
     def __init__(self, dataset_name:str, split:str, image_size:int, batch_size:int=16, shuffle:bool=True, 
-                 num_workers:int=0, pin_memory:bool=False, persistent_workers:bool=False) :
+                 num_workers:int=0, pin_memory:bool=False, persistent_workers:bool=False, conversionRGBA:bool=False) :
         if not os.path.exists('cache/datasets'):
             os.makedirs('cache/datasets', exist_ok=True)
         dataset = load_dataset(dataset_name, split=split, cache_dir='cache/datasets')
@@ -26,8 +27,18 @@ class ModularCharactersDataLoader(torch.utils.data.DataLoader):
             )
         
         def transform(rows:dict)->dict:
-            images_input = [preprocess(image.convert('RGB')) for image in rows['input']]
-            images_target = [preprocess(image.convert('RGB')) for image in rows['target']]
+            # Convert RGBA images to RGB with white background
+            def rgba_to_rgb_white(img):
+                if img.mode == 'RGBA' and conversionRGBA:
+                    background = Image.new('RGB', img.size, (255, 255, 255))
+                    background.paste(img, mask=img.split()[3])  # 3 is the alpha channel
+                    return background
+                return img
+
+            rows['input'] = [rgba_to_rgb_white(image) for image in rows['input']]
+            rows['target'] = [rgba_to_rgb_white(image) for image in rows['target']]
+            images_input = [preprocess(image) for image in rows['input']]
+            images_target = [preprocess(image) for image in rows['target']]
             class_labels = [torch.tensor(self.vocab.get(prompt,-1),dtype=torch.long).unsqueeze(0) for prompt in rows['prompt']]
             return {'input': images_input,
                     'target': images_target,
