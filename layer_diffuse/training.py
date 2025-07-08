@@ -3,7 +3,8 @@ from models import (
     DDPMNextTokenV2,
     DDPMNextTokenV3,
     DDIMNextTokenV1,
-    DDIMNextTokenV1_Refactored
+    DDIMNextTokenV1_Refactored,
+    DDIMNextTokenV2
 )
 
 
@@ -32,6 +33,7 @@ def train_loop():
             "DDPMNextTokenV2",
             "DDPMNextTokenV3",
             "DDIMNextTokenV1",
+            "DDIMNextTokenV2",
             "DDIMNextTokenV1_Refactored"
         ],
         help="Model version to use for training",
@@ -168,6 +170,10 @@ def train_loop():
         scheduler_config = DDIMNextTokenV1.SchedulerConfig()
         scheduler_config.config['beta_schedule'] = beta_schedule
         pipeline = DDIMNextTokenV1.DDIMNextTokenV1Pipeline(scheduler_config=scheduler_config)
+    elif args.model_version == "DDIMNextTokenV2":
+        scheduler_config = DDIMNextTokenV2.DDIMSchedulerConfig()
+        scheduler_config.config['beta_schedule'] = beta_schedule
+        pipeline = DDIMNextTokenV2.DDIMNextTokenV2Pipeline(scheduler_config=scheduler_config)
     elif args.model_version == "DDIMNextTokenV1_Refactored":
         # Use the refactored version of DDIMNextTokenV1
         scheduler_config = DDIMNextTokenV1_Refactored.DDIMSchedulerConfig()
