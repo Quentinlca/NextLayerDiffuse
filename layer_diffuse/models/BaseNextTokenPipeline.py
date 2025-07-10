@@ -38,19 +38,19 @@ class BaseTrainingConfig:
     num_epochs = 50
     gradient_accumulation_steps = 4
     learning_rate = 2e-4
-    lr_warmup_steps = 125
+    lr_warmup_steps = 1000
     save_image_epochs = 1
     save_model_epochs = 3
     seed = 0
-    train_size = 128000
-    val_size = 32000
+    train_size = 2000 # Number of batch samples to train on
+    val_size = 1000 # Number of batch samples to validate on
     mixed_precision = "fp16"  # `no` for float32, `fp16` for automatic mixed precision
     output_dir = ""  # to be set by subclasses
     backup_output_dir = ""  # to be set by subclasses
     push_to_hub = True  # whether to upload the saved model to the HF Hub
     hub_model_id = ""  # to be set by subclasses
     wandb_project_name = ""  # to be set by subclasses
-    FID_eval_steps = 5
+    FID_eval_steps = 3
 
     def get_dict(self):
         return {
@@ -317,14 +317,11 @@ class BaseNextTokenPipeline(ABC):
         )
         lr_scheduler = get_cosine_schedule_with_warmup(
             optimizer=optimizer,
-            num_warmup_steps=self.train_config.lr_warmup_steps,
+            num_warmup_steps=self.train_config.lr_warmup_steps // self.train_config.gradient_accumulation_steps,
             num_training_steps=(
                 train_size
                 * self.train_config.num_epochs
-                // (
-                    self.train_config.train_batch_size
-                    * self.train_config.gradient_accumulation_steps
-                )
+                // self.train_config.gradient_accumulation_steps
             ),
             num_cycles=num_cycles,
         )
@@ -373,38 +370,6 @@ class BaseNextTokenPipeline(ABC):
                 else:
                     print("Failed to reset parameters. Training may be unstable.")
 
-            # Take a random subset of the training dataset of size train_size
-            # if train_size is not None and train_size < len(train_dataloader.dataset):  # type: ignore
-            #     indices = torch.randperm(
-            #         len(train_dataloader.dataset),  # type: ignore
-            #         generator=random_generator,
-            #         device=self.device,
-            #     )[:train_size]
-            #     subset = torch.utils.data.Subset(train_dataloader.dataset, indices)  # type: ignore
-            #     train_dataloader = torch.utils.data.DataLoader(
-            #         subset,
-            #         batch_size=self.train_config.train_batch_size,
-            #         shuffle=True,
-            #         num_workers=getattr(train_dataloader, "num_workers", 0),
-            #         pin_memory=getattr(train_dataloader, "pin_memory", False),
-            #         drop_last=getattr(train_dataloader, "drop_last", False),
-            #     )
-            # if val_size is not None and val_size < len(val_dataloader.dataset):  # type: ignore
-            #     indices = torch.randperm(
-            #         len(val_dataloader.dataset),  # type: ignore
-            #         generator=random_generator,
-            #         device=self.device,
-            #     )[:val_size]
-            #     subset = torch.utils.data.Subset(val_dataloader.dataset, indices)  # type: ignore
-            #     val_dataloader = torch.utils.data.DataLoader(
-            #         subset,
-            #         batch_size=self.train_config.eval_batch_size,
-            #         shuffle=False,
-            #         num_workers=getattr(val_dataloader, "num_workers", 0),
-            #         pin_memory=getattr(val_dataloader, "pin_memory", False),
-            #         drop_last=getattr(val_dataloader, "drop_last", False),
-            #     )
-
             # Training loop
             progress_bar = tqdm(
                 total=train_size,
@@ -417,6 +382,7 @@ class BaseNextTokenPipeline(ABC):
             for step, batch in enumerate(train_dataloader):
                 if step >= train_size:
                     break
+                
                 input_images = batch["input"].to(self.device)
                 target_images = batch["target"].to(self.device)
                 class_labels = batch["label"].to(self.device)

@@ -40,17 +40,17 @@ def train_loop():
     )
     parser.add_argument("--train_size",
         type=int,
-        default=16000,
+        default=2000,
         help="Number of training batches",
     )
     parser.add_argument("--val_size",
         type=int,
-        default=1600,
+        default=1000,
         help="Number of validation batches",
     )
     parser.add_argument("--batch_size",
         type=int,
-        default=16,
+        default=32,
         help="Batch size for training and validation",
     )
     parser.add_argument("--dataset_name",
@@ -97,12 +97,12 @@ def train_loop():
     )
     parser.add_argument("--dataloader_num_workers",
         type=int,
-        default=4,
+        default=0,
         help="Number of workers for data loading",
     )
     parser.add_argument("--beta_schedule",
         type=str,
-        default="linear",
+        default="squaredcos_cap_v2",
         choices=["linear", "scaled_linear", "squaredcos_cap_v2"],
         help="Beta schedule for the diffusion scheduler",
     )
