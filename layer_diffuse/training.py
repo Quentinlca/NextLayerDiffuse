@@ -116,10 +116,47 @@ def train_loop():
         default="",
         help="Path to the vocabulary file (default: 'vocab.json')",
     )
+    parser.add_argument("--resume_training",
+        action="store_true",
+        help="Whether to resume training from a previous run",
+    )
+    parser.add_argument("--resume_run_name",
+        type=str,
+        default="",
+        help="Name of the run to resume from (required if --resume_training is set)",
+    )
+    parser.add_argument("--resume_epoch",
+        type=int,
+        default=0,
+        help="Epoch number to resume from (required if --resume_training is set)",
+    )
+    parser.add_argument("--resume_learning_rate",
+        type=float,
+        default=None,
+        help="Learning rate to use when resuming (optional, will try to get from wandb if not specified)",
+    )
+    parser.add_argument("--resume_warmup_steps",
+        type=int,
+        default=None,
+        help="Warmup steps to use when resuming (optional, will use config default if not specified)",
+    )
+    parser.add_argument("--resume_num_epochs",
+        type=int,
+        default=None,
+        help="Number of epochs to train for when resuming (optional, will use remaining epochs if not specified)",
+    )
     
     
 
     args = parser.parse_args()
+    
+    # Validate resume training arguments
+    if args.resume_training:
+        if not args.resume_run_name:
+            parser.error("--resume_run_name is required when --resume_training is set")
+        if args.resume_epoch < 0:
+            parser.error("--resume_epoch must be non-negative")
+    
     # get the training and validation sizes from the command line arguments
     val_split = args.val_split
     train_split = args.train_split
@@ -148,6 +185,14 @@ def train_loop():
     mixed_precision = args.mixed_precision
     dataloader_num_workers = args.dataloader_num_workers
     
+    # Resume training parameters
+    resume_training = args.resume_training
+    resume_run_name = args.resume_run_name
+    resume_epoch = args.resume_epoch
+    resume_learning_rate = args.resume_learning_rate
+    resume_warmup_steps = args.resume_warmup_steps
+    resume_num_epochs = args.resume_num_epochs
+    
     train_tags = args.train_tags
     
     extra_kwargs = {
@@ -159,6 +204,7 @@ def train_loop():
     }
 
     # Initialize the DDPMNextTokenV1 pipeline
+    pipeline = None  # Initialize to help with type checking
     if args.model_version == "DDPMNextTokenV1":
         pipeline = DDPMNextTokenV1.DDPMNextTokenV1Pipeline()
         scheduler_config = DDPMNextTokenV1.SchedulerConfig()
@@ -181,6 +227,9 @@ def train_loop():
         pipeline = DDIMNextTokenV1_Refactored.DDIMNextTokenV1PipelineRefactored(scheduler_config=scheduler_config)
     else:
         raise ValueError(f"Unknown model version: {args.model_version}")
+    
+    if pipeline is None:
+        raise RuntimeError("Pipeline initialization failed")
     pipeline.train_config.train_batch_size = batch_size
     pipeline.train_config.eval_batch_size = batch_size
     pipeline.train_config.num_epochs = num_epochs
@@ -220,14 +269,41 @@ def train_loop():
         conversionRGBA=True,
         vocab=vocab,  # Pass the vocabulary if provided
     )
-    # Start the training process
-    pipeline.train_accelerate(
-        train_dataloader=train_dataloader,
-        val_dataloader=val_dataloader,
-        train_size=train_size,
-        val_size=val_size,
-        **extra_kwargs,  # Pass all extra parameters through
-    )
+    
+    # Start the training process - either resume or start fresh
+    if resume_training:
+        print(f"Resuming training from run: {resume_run_name}, epoch: {resume_epoch}")
+        
+        # Check if the pipeline supports resuming training
+        if not hasattr(pipeline, 'resume_training'):
+            raise AttributeError(
+                f"The selected model version '{args.model_version}' does not support resume training. "
+                f"Resume training is only available for refactored pipeline classes that inherit from BaseNextTokenPipeline. "
+                f"Please use 'DDIMNextTokenV1_Refactored' or other refactored model versions, "
+                f"or start fresh training instead."
+            )
+        
+        pipeline.resume_training( # type: ignore
+            run_name=resume_run_name,
+            epoch=resume_epoch,
+            train_dataloader=train_dataloader,
+            val_dataloader=val_dataloader,
+            train_size=train_size,
+            val_size=val_size,
+            learning_rate=resume_learning_rate,
+            lr_warmup_steps=resume_warmup_steps,
+            num_epochs=resume_num_epochs,
+            **extra_kwargs,  # Pass all extra parameters through
+        )
+    else:
+        print("Starting fresh training")
+        pipeline.train_accelerate(
+            train_dataloader=train_dataloader,
+            val_dataloader=val_dataloader,
+            train_size=train_size,
+            val_size=val_size,
+            **extra_kwargs,  # Pass all extra parameters through
+        )
 
 
 if __name__ == "__main__":
