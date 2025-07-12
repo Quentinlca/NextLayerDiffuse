@@ -802,3 +802,130 @@ class BaseNextTokenPipeline(ABC):
             self.repo.git_pull(rebase=True)  # Pull the latest changes from the hub
         else:
             self.repo = None
+
+    def _get_last_lr_from_run(self, run_name: str) -> Optional[float]:
+        """Get the last learning rate from a previous training run using wandb."""
+        try:
+            api = wandb.Api()
+            # Find the run in the project
+            runs = api.runs(self.train_config.wandb_project_name)
+            target_run = None
+            for run in runs:
+                if run.name == run_name:
+                    target_run = run
+                    break
+            
+            if target_run is None:
+                print(f"Run {run_name} not found in wandb project {self.train_config.wandb_project_name}")
+                return None
+            
+            # Get the history and find the last learning rate
+            history = target_run.history(keys=["lr"])
+            if len(history) > 0:
+                last_lr = history.iloc[-1]["lr"]
+                print(f"Found last learning rate from run {run_name}: {last_lr}")
+                return float(last_lr)
+            else:
+                print(f"No learning rate history found for run {run_name}")
+                return None
+        except Exception as e:
+            print(f"Error retrieving learning rate from wandb for run {run_name}: {e}")
+            return None
+
+    def resume_training(
+        self, 
+        run_name: str, 
+        epoch: int, 
+        train_dataloader, 
+        val_dataloader, 
+        train_size: int = 1000, 
+        val_size: int = 100,
+        learning_rate: Optional[float] = None,
+        lr_warmup_steps: Optional[int] = None,
+        num_epochs: Optional[int] = None,
+        **params
+    ):
+        """
+        Resume training from a specific run and epoch, or start new training if model doesn't exist.
+        
+        Args:
+            run_name: Name of the run to resume from
+            epoch: Epoch number to resume from
+            train_dataloader: Training data loader
+            val_dataloader: Validation data loader
+            train_size: Number of training batches per epoch
+            val_size: Number of validation batches per epoch
+            learning_rate: Learning rate to use. If None, tries to get last LR from previous run
+            lr_warmup_steps: Warmup steps for learning rate scheduler. If None, uses config default
+            num_epochs: Number of epochs to train for. If None, uses remaining epochs from original config
+            **params: Additional parameters passed to train method
+        """
+        print(f"Attempting to resume training from run: {run_name}, epoch: {epoch}")
+        
+        # Try to load the model from the specified run and epoch
+        model_loaded = False
+        try:
+            model_loaded = self.load_model_from_hub(run_name, epoch)
+        except Exception as e:
+            print(f"Failed to load model from hub: {e}")
+            model_loaded = False
+        
+        if not model_loaded:
+            print(f"Model from run {run_name} epoch {epoch} not found. Starting new training...")
+            # Reset to a fresh model
+            self.unet = self._create_unet()
+            self.unet = self.unet.to(self.device)  # type: ignore
+        else:
+            print(f"Successfully loaded model from run {run_name} epoch {epoch}")
+        
+        # Handle learning rate
+        if learning_rate is None:
+            # Try to get the last learning rate from the previous run
+            last_lr = self._get_last_lr_from_run(run_name)
+            if last_lr is not None:
+                learning_rate = last_lr
+            else:
+                learning_rate = self.train_config.learning_rate
+                print(f"Using default learning rate: {learning_rate}")
+        
+        # Update training config with new learning rate
+        original_lr = self.train_config.learning_rate
+        self.train_config.learning_rate = learning_rate
+        
+        # Handle warmup steps
+        if lr_warmup_steps is not None:
+            original_warmup = self.train_config.lr_warmup_steps
+            self.train_config.lr_warmup_steps = lr_warmup_steps
+        
+        # Calculate epochs to train
+        original_epochs = self.train_config.num_epochs
+        if num_epochs is not None:
+            # Use specified number of epochs
+            epochs_to_train = num_epochs
+            print(f"Training for {epochs_to_train} epochs as specified")
+        elif model_loaded:
+            # Calculate remaining epochs from original configuration
+            epochs_to_train = max(0, self.train_config.num_epochs - (epoch + 1))
+            print(f"Resuming training for {epochs_to_train} remaining epochs from original config")
+        else:
+            # New training - use original epoch count
+            epochs_to_train = self.train_config.num_epochs
+            print(f"Starting fresh training for {epochs_to_train} epochs")
+        
+        self.train_config.num_epochs = epochs_to_train
+        
+        # Update the train_id appropriately
+        if model_loaded:
+            # Update the train_id to indicate this is a resumed run
+            self.train_id = f"resume_{run_name}_from_epoch_{epoch}_{time.strftime('%Y-%m-%d_%H-%M-%S')}"
+        # For new training, the train_id will be set in the train() method
+        
+        try:
+            # Start training
+            self.train(train_dataloader, val_dataloader, train_size, val_size, **params)
+        finally:
+            # Restore original config values
+            self.train_config.learning_rate = original_lr
+            if lr_warmup_steps is not None:
+                self.train_config.lr_warmup_steps = original_warmup
+            self.train_config.num_epochs = original_epochs
