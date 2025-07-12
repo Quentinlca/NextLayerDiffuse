@@ -117,7 +117,7 @@ def train_loop():
         help="Path to the vocabulary file (default: 'vocab.json')",
     )
     parser.add_argument("--resume_training",
-        action="store_true",
+        action=argparse.BooleanOptionalAction,
         help="Whether to resume training from a previous run",
     )
     parser.add_argument("--resume_run_name",
