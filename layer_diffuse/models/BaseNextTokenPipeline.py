@@ -124,6 +124,10 @@ class BaseNextTokenPipeline(ABC):
         )
         self.train_id = ""
         self.model_version = ""
+        
+        # Initialize resume tracking attributes
+        self._resume_from_run: Optional[str] = None
+        self._resume_from_epoch: Optional[int] = None
 
         # Set the configurations - to be customized by subclasses
         self.train_config = (
@@ -289,27 +293,50 @@ class BaseNextTokenPipeline(ABC):
         num_cycles = params.get("num_cycles", 0.5)
         train_tags = params.get("train_tags", None)
 
-        # Initialize the wandb run
+        # Initialize the wandb run - handle resumed training
+        wandb_config = {
+            "run_id": self.train_id,
+            "train_config": self.train_config.get_dict(),
+            "dataset": {
+                "name": train_dataloader.dataset_name,
+                "train_split": train_dataloader.split,
+                "val_split": val_dataloader.split,
+            },
+            "model_config": self.model_config.config,
+            "scheduler_config": self.scheduler_config.config,
+            "inference_config": self.inference_config.get_dict(),
+            "optimizer": "AdamW",
+            "Lr_scheduler": "Cosine with warmup",
+            "other_params": params,
+        }
+        
+        # Add resume information to config if this is a resumed run
+        wandb_resume = None
+        if hasattr(self, '_resume_from_run') and self._resume_from_run is not None:
+            wandb_config["resumed_from_run"] = self._resume_from_run
+            wandb_config["resumed_from_epoch"] = self._resume_from_epoch
+            if train_tags:
+                train_tags.append("resumed_training")
+            else:
+                train_tags = ["resumed_training"]
+            
+            # Try to get the previous wandb run ID for potential resuming
+            previous_run_id = self._get_wandb_run_id_from_run(self._resume_from_run)
+            if previous_run_id:
+                # Note: We create a new run but link it to the previous one in the config
+                wandb_config["previous_wandb_run_id"] = previous_run_id
+
         wandb.init(
             project=self.train_config.wandb_project_name,
             name=self.train_id,
             tags=train_tags,
-            config={
-                "run_id": self.train_id,
-                "train_config": self.train_config.get_dict(),
-                "dataset": {
-                    "name": train_dataloader.dataset_name,
-                    "train_split": train_dataloader.split,
-                    "val_split": val_dataloader.split,
-                },
-                "model_config": self.model_config.config,
-                "scheduler_config": self.scheduler_config.config,
-                "inference_config": self.inference_config.get_dict(),
-                "optimizer": "AdamW",
-                "Lr_scheduler": "Cosine with warmup",
-                "other_params": params,
-            },
+            config=wandb_config,
+            resume=wandb_resume,
         )
+        
+        # Log resume information if this is a resumed training
+        if hasattr(self, '_resume_from_run') and self._resume_from_run is not None and self._resume_from_epoch is not None:
+            self._log_resume_info(self._resume_from_run, self._resume_from_epoch)
 
         # Create the optimizer and learning rate scheduler
         optimizer = torch.optim.AdamW(
@@ -350,7 +377,13 @@ class BaseNextTokenPipeline(ABC):
             )
         )
 
-        global_step = 0
+        # Initialize global_step - continue from previous training if resumed
+        if hasattr(self, '_resume_from_run') and self._resume_from_run is not None:
+            global_step = self._get_last_step_from_run(self._resume_from_run) + 1
+            print(f"Resuming from global step: {global_step}")
+        else:
+            global_step = 0
+        
         nan_count = 0  # Counter for NaN occurrences
         max_nan_tolerance = 10  # Maximum number of NaN occurrences before stopping
 
@@ -484,6 +517,12 @@ class BaseNextTokenPipeline(ABC):
                     "step": global_step,
                     "epoch": epoch,
                 }
+                
+                # Add resume information to logs if this is a resumed training
+                if hasattr(self, '_resume_from_run') and self._resume_from_run is not None:
+                    logs["resumed_from_run"] = self._resume_from_run
+                    logs["resumed_from_epoch"] = self._resume_from_epoch
+                
                 progress_bar.set_postfix(**logs)
                 accelerator.log(logs, step=global_step)
                 global_step += 1
@@ -522,6 +561,12 @@ class BaseNextTokenPipeline(ABC):
                     val_loss += loss.item()
                 val_loss /= val_size
                 logs = {"val_loss": val_loss, "step": global_step, "epoch": epoch}
+                
+                # Add resume information to validation logs if this is a resumed training
+                if hasattr(self, '_resume_from_run') and self._resume_from_run is not None:
+                    logs["resumed_from_run"] = self._resume_from_run
+                    logs["resumed_from_epoch"] = self._resume_from_epoch
+                
                 if self.train_config.FID_eval_steps > 0 and (epoch + 1) % self.train_config.FID_eval_steps == 0:
                     FID_score = self.get_FID_score(
                         dataloader=val_dataloader,
@@ -558,6 +603,9 @@ class BaseNextTokenPipeline(ABC):
                     or epoch == self.train_config.num_epochs - 1
                 ):
                     self.save_model(revision=self.train_id, epoch=epoch)
+        
+        # Log training summary at the end
+        self.log_training_summary()
 
     @abstractmethod
     def _forward_unet(self, input_images: torch.Tensor, noisy_targets: torch.Tensor, 
@@ -803,6 +851,99 @@ class BaseNextTokenPipeline(ABC):
         else:
             self.repo = None
 
+    def _log_resume_info(self, run_name: str, resume_epoch: int):
+        """Log information about resuming training from a previous run."""
+        try:
+            api = wandb.Api()
+            # Find the run in the project
+            runs = api.runs(self.train_config.wandb_project_name)
+            target_run = None
+            for run in runs:
+                if run.name == run_name:
+                    target_run = run
+                    break
+            
+            if target_run is None:
+                print(f"Run {run_name} not found in wandb project {self.train_config.wandb_project_name}")
+                return
+            
+            # Get the final metrics from the previous run
+            final_history = target_run.history(keys=["loss", "val_loss", "lr", "step", "epoch"])
+            if len(final_history) > 0:
+                # Find the metrics at the resume epoch
+                epoch_metrics = final_history[final_history["epoch"] == resume_epoch]
+                if len(epoch_metrics) > 0:
+                    last_metrics = epoch_metrics.iloc[-1]
+                    
+                    # Log the resume information
+                    wandb.log({
+                        "resume_info/previous_run": run_name,
+                        "resume_info/resume_epoch": resume_epoch,
+                        "resume_info/previous_final_loss": last_metrics.get("loss", 0),
+                        "resume_info/previous_final_val_loss": last_metrics.get("val_loss", 0),
+                        "resume_info/previous_final_lr": last_metrics.get("lr", 0),
+                    }, step=int(last_metrics.get("step", 0)))
+                    
+                    print(f"Logged resume information from {run_name} at epoch {resume_epoch}")
+                else:
+                    print(f"No metrics found for epoch {resume_epoch} in run {run_name}")
+            else:
+                print(f"No history found for run {run_name}")
+                
+        except Exception as e:
+            print(f"Error logging resume info for run {run_name}: {e}")
+
+    def _get_wandb_run_id_from_run(self, run_name: str) -> Optional[str]:
+        """Get the wandb run ID from a previous training run."""
+        try:
+            api = wandb.Api()
+            # Find the run in the project
+            runs = api.runs(self.train_config.wandb_project_name)
+            target_run = None
+            for run in runs:
+                if run.name == run_name:
+                    target_run = run
+                    break
+            
+            if target_run is None:
+                print(f"Run {run_name} not found in wandb project {self.train_config.wandb_project_name}")
+                return None
+            
+            print(f"Found wandb run ID for {run_name}: {target_run.id}")
+            return target_run.id
+        except Exception as e:
+            print(f"Error retrieving wandb run ID for run {run_name}: {e}")
+            return None
+
+    def _get_last_step_from_run(self, run_name: str) -> int:
+        """Get the last global step from a previous training run using wandb."""
+        try:
+            api = wandb.Api()
+            # Find the run in the project
+            runs = api.runs(self.train_config.wandb_project_name)
+            target_run = None
+            for run in runs:
+                if run.name == run_name:
+                    target_run = run
+                    break
+            
+            if target_run is None:
+                print(f"Run {run_name} not found in wandb project {self.train_config.wandb_project_name}")
+                return 0
+            
+            # Get the history and find the last step
+            history = target_run.history(keys=["step"])
+            if len(history) > 0:
+                last_step = history.iloc[-1]["step"]
+                print(f"Found last step from run {run_name}: {last_step}")
+                return int(last_step)
+            else:
+                print(f"No step history found for run {run_name}")
+                return 0
+        except Exception as e:
+            print(f"Error retrieving step from wandb for run {run_name}: {e}")
+            return 0
+
     def _get_last_lr_from_run(self, run_name: str) -> Optional[float]:
         """Get the last learning rate from a previous training run using wandb."""
         try:
@@ -918,7 +1059,13 @@ class BaseNextTokenPipeline(ABC):
         if model_loaded:
             # Update the train_id to indicate this is a resumed run
             self.train_id = f"resume_{run_name}_from_epoch_{epoch}_{time.strftime('%Y-%m-%d_%H-%M-%S')}"
-        # For new training, the train_id will be set in the train() method
+            # Store resume information for wandb logging
+            self._resume_from_run = run_name
+            self._resume_from_epoch = epoch
+        else:
+            # For new training, the train_id will be set in the train() method
+            self._resume_from_run = None
+            self._resume_from_epoch = None
         
         try:
             # Start training
@@ -929,3 +1076,25 @@ class BaseNextTokenPipeline(ABC):
             if lr_warmup_steps is not None:
                 self.train_config.lr_warmup_steps = original_warmup
             self.train_config.num_epochs = original_epochs
+
+    def log_training_summary(self):
+        """Log a summary of the training run, including resume information if applicable."""
+        summary = {
+            "training_summary/run_id": self.train_id,
+            "training_summary/model_version": self.model_version,
+            "training_summary/total_epochs": self.train_config.num_epochs,
+            "training_summary/final_lr": self.train_config.learning_rate,
+        }
+        
+        # Add resume information if this was a resumed training
+        if hasattr(self, '_resume_from_run') and self._resume_from_run is not None:
+            summary.update({
+                "training_summary/was_resumed": True,
+                "training_summary/resumed_from_run": self._resume_from_run,
+                "training_summary/resumed_from_epoch": self._resume_from_epoch,
+            })
+        else:
+            summary["training_summary/was_resumed"] = False
+        
+        wandb.log(summary)
+        print(f"Training summary logged for run: {self.train_id}")
