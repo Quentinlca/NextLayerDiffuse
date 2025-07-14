@@ -873,7 +873,7 @@ class BaseNextTokenPipeline(ABC):
             final_history = target_run.scan_history()
             print("Logging resume information for run:", run_name)
             for row in final_history:
-                logs = {k: v for k, v in row.items() if k[0] != "_" and v is not None}
+                logs = {k: v for k, v in row.items() if k[0] != "_" and v is not None and int(row['epoch']) <= resume_epoch}
                 wandb_run.log(logs)
                 
         except Exception as e:
