@@ -869,6 +869,7 @@ class BaseNextTokenPipeline(ABC):
                 return
             
             # Get the final metrics from the previous run
+            print("Retrieving final metrics from run:", run_name)
             final_history = target_run.scan_history()
             print("Logging resume information for run:", run_name)
             for row in final_history:
