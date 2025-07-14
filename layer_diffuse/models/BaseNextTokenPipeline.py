@@ -389,6 +389,7 @@ class BaseNextTokenPipeline(ABC):
         if self.train_config.resume_from_run is not None:
             global_step = self.train_config.resume_step + 1 if self.train_config.resume_step is not None else 0
             global_epoch = self.train_config.resume_from_epoch + 1 if self.train_config.resume_from_epoch is not None else 0
+            wandb_run.config["train_config"]['resume_step'] = global_step
             print(f"Resuming from global step: {global_step}")
         else:
             global_step = 0
