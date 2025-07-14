@@ -44,6 +44,7 @@ class BaseTrainingConfig:
     seed = 0
     train_size = 2000 # Number of batch samples to train on
     val_size = 1000 # Number of batch samples to validate on
+    FID_eval_size = 100
     mixed_precision = "fp16"  # `no` for float32, `fp16` for automatic mixed precision
     output_dir = ""  # to be set by subclasses
     backup_output_dir = ""  # to be set by subclasses
@@ -51,6 +52,8 @@ class BaseTrainingConfig:
     hub_model_id = ""  # to be set by subclasses
     wandb_project_name = ""  # to be set by subclasses
     FID_eval_steps = 3
+    resume_from_run: Optional[str] = None  # Run ID to resume from
+    resume_from_epoch: Optional[int] = None  # Epoch to resume from
 
     def get_dict(self):
         return {
@@ -312,21 +315,21 @@ class BaseNextTokenPipeline(ABC):
         
         # Add resume information to config if this is a resumed run
         wandb_resume = None
-        if hasattr(self, '_resume_from_run') and self._resume_from_run is not None:
-            wandb_config["resumed_from_run"] = self._resume_from_run
-            wandb_config["resumed_from_epoch"] = self._resume_from_epoch
+        if self.train_config.resume_from_run is not None:
+            wandb_config["resumed_from_run"] = self.train_config.resume_from_run
+            wandb_config["resumed_from_epoch"] = self.train_config.resume_from_epoch
             if train_tags:
                 train_tags.append("resumed_training")
             else:
                 train_tags = ["resumed_training"]
             
             # Try to get the previous wandb run ID for potential resuming
-            previous_run_id = self._get_wandb_run_id_from_run(self._resume_from_run)
+            previous_run_id = self._get_wandb_run_id_from_run(self.train_config.resume_from_run)
             if previous_run_id:
                 # Note: We create a new run but link it to the previous one in the config
                 wandb_config["previous_wandb_run_id"] = previous_run_id
 
-        wandb.init(
+        wandb_run = wandb.init(
             project=self.train_config.wandb_project_name,
             name=self.train_id,
             tags=train_tags,
@@ -336,7 +339,9 @@ class BaseNextTokenPipeline(ABC):
         
         # Log resume information if this is a resumed training
         if hasattr(self, '_resume_from_run') and self._resume_from_run is not None and self._resume_from_epoch is not None:
-            self._log_resume_info(self._resume_from_run, self._resume_from_epoch)
+            self._log_resume_info(wandb_run=wandb_run, 
+                                  run_name=self._resume_from_run, 
+                                  resume_epoch=self._resume_from_epoch)
 
         # Create the optimizer and learning rate scheduler
         optimizer = torch.optim.AdamW(
@@ -378,11 +383,13 @@ class BaseNextTokenPipeline(ABC):
         )
 
         # Initialize global_step - continue from previous training if resumed
-        if hasattr(self, '_resume_from_run') and self._resume_from_run is not None:
-            global_step = self._get_last_step_from_run(self._resume_from_run) + 1
+        if self.train_config.resume_from_run is not None:
+            global_step = self._get_last_step_from_run(self.train_config.resume_from_run) + 1
+            global_epoch = self.train_config.resume_from_epoch + 1 if self.train_config.resume_from_epoch is not None else 0
             print(f"Resuming from global step: {global_step}")
         else:
             global_step = 0
+            global_epoch = 0
         
         nan_count = 0  # Counter for NaN occurrences
         max_nan_tolerance = 10  # Maximum number of NaN occurrences before stopping
@@ -396,7 +403,7 @@ class BaseNextTokenPipeline(ABC):
             # Check for NaN values in model parameters at the start of each epoch
             if self.check_model_for_nan():
                 print(
-                    f"NaN values detected in model parameters at the start of epoch {epoch}. Attempting to reset..."
+                    f"NaN values detected in model parameters at the start of epoch {global_epoch}. Attempting to reset..."
                 )
                 if self.reset_nan_parameters():
                     print("Model parameters reset. Continuing training...")
@@ -409,7 +416,7 @@ class BaseNextTokenPipeline(ABC):
                 disable=not accelerator.is_local_main_process,
                 unit="batch",
             )
-            progress_bar.set_description(f"Epoch {epoch}")
+            progress_bar.set_description(f"Epoch {global_epoch}")
             self.unet.train()
             
             for step, batch in enumerate(train_dataloader):
@@ -423,7 +430,7 @@ class BaseNextTokenPipeline(ABC):
                 # Check for NaN values in input data
                 if torch.isnan(input_images).any() or torch.isnan(target_images).any():
                     print(
-                        f"Warning: NaN values detected in input data at step {step}, epoch {epoch}. Skipping this batch."
+                        f"Warning: NaN values detected in input data at step {step}, epoch {global_epoch}. Skipping this batch."
                     )
                     nan_count += 1
                     if nan_count > max_nan_tolerance:
@@ -456,7 +463,7 @@ class BaseNextTokenPipeline(ABC):
                     # Check for NaN loss and skip this batch if detected
                     if torch.isnan(loss) or torch.isinf(loss):
                         print(
-                            f"Warning: NaN or Inf loss detected at step {step}, epoch {epoch}. Skipping this batch."
+                            f"Warning: NaN or Inf loss detected at step {step}, epoch {global_epoch}. Skipping this batch."
                         )
                         nan_count += 1
                         if nan_count > max_nan_tolerance:
@@ -469,7 +476,7 @@ class BaseNextTokenPipeline(ABC):
                     # Check for NaN values in noise prediction
                     if torch.isnan(noise_pred).any():
                         print(
-                            f"Warning: NaN values detected in noise prediction at step {step}, epoch {epoch}. Skipping this batch."
+                            f"Warning: NaN values detected in noise prediction at step {step}, epoch {global_epoch}. Skipping this batch."
                         )
                         nan_count += 1
                         if nan_count > max_nan_tolerance:
@@ -490,7 +497,7 @@ class BaseNextTokenPipeline(ABC):
                                 or torch.isinf(param.grad).any()
                             ):
                                 print(
-                                    f"Warning: NaN or Inf gradient detected in parameter {name} at step {step}, epoch {epoch}"
+                                    f"Warning: NaN or Inf gradient detected in parameter {name} at step {step}, epoch {global_epoch}"
                                 )
                                 has_nan_gradients = True
                                 break
@@ -515,20 +522,16 @@ class BaseNextTokenPipeline(ABC):
                     "loss": loss.detach().item(),
                     "lr": lr_scheduler.get_last_lr()[0],
                     "step": global_step,
-                    "epoch": epoch,
+                    "epoch": global_epoch,
                 }
-                
-                # Add resume information to logs if this is a resumed training
-                if hasattr(self, '_resume_from_run') and self._resume_from_run is not None:
-                    logs["resumed_from_run"] = self._resume_from_run
-                    logs["resumed_from_epoch"] = self._resume_from_epoch
+            
                 
                 progress_bar.set_postfix(**logs)
                 accelerator.log(logs, step=global_step)
                 global_step += 1
                 wandb.log(logs)
 
-            self.model_version = f"{self.train_id}_epoch_{epoch}"
+            self.model_version = f"{self.train_id}_epoch_{global_epoch}"
 
             # Evaluation loop
             with torch.no_grad():
@@ -560,18 +563,13 @@ class BaseNextTokenPipeline(ABC):
                     loss = F.mse_loss(noise_pred, noise)
                     val_loss += loss.item()
                 val_loss /= val_size
-                logs = {"val_loss": val_loss, "step": global_step, "epoch": epoch}
-                
-                # Add resume information to validation logs if this is a resumed training
-                if hasattr(self, '_resume_from_run') and self._resume_from_run is not None:
-                    logs["resumed_from_run"] = self._resume_from_run
-                    logs["resumed_from_epoch"] = self._resume_from_epoch
-                
-                if self.train_config.FID_eval_steps > 0 and (epoch + 1) % self.train_config.FID_eval_steps == 0:
+                logs = {"val_loss": val_loss, "step": global_step, "epoch": global_epoch}
+
+                if self.train_config.FID_eval_steps > 0 and (global_epoch + 1) % self.train_config.FID_eval_steps == 0:
                     FID_score = self.get_FID_score(
                         dataloader=val_dataloader,
                         num_inference_steps=self.inference_config.num_inference_steps,
-                        eval_size=val_size,
+                        eval_size=self.train_config.FID_eval_size,
                     )
                     logs["FID_score"] = FID_score
                 wandb.log(logs)
@@ -582,29 +580,29 @@ class BaseNextTokenPipeline(ABC):
             if accelerator.is_main_process:
                 # Saving the images
                 if (
-                    (epoch + 1) % self.train_config.save_image_epochs == 0
-                    or epoch == self.train_config.num_epochs - 1
+                    (global_epoch + 1) % self.train_config.save_image_epochs == 0
+                    or global_epoch == self.train_config.num_epochs - 1
                 ):
                     image_path = self.save_training_samples(
                         dataloader=val_dataloader,
-                        epoch=epoch,
+                        epoch=global_epoch,
                         generator=random_generator,
                     )
                     wandb.log(
                         {
                             "sample_images": wandb.Image(
-                                image_path, caption=f"Epoch {epoch} samples"
+                                image_path, caption=f"Epoch {global_epoch} samples"
                             ),
-                            "epoch": epoch,
+                            "epoch": global_epoch,
                         }
                     )
                 # Saving the model
                 if (
-                    (epoch + 1) % self.train_config.save_model_epochs == 0
-                    or epoch == self.train_config.num_epochs - 1
+                    (global_epoch + 1) % self.train_config.save_model_epochs == 0
+                    or global_epoch == self.train_config.num_epochs - 1
                 ):
-                    self.save_model(revision=self.train_id, epoch=epoch)
-        
+                    self.save_model(revision=self.train_id, epoch=global_epoch)
+            global_epoch += 1
         # Log training summary at the end
         self.log_training_summary()
 
@@ -854,7 +852,7 @@ class BaseNextTokenPipeline(ABC):
         else:
             self.repo = None
 
-    def _log_resume_info(self, run_name: str, resume_epoch: int):
+    def _log_resume_info(self, wandb_run,run_name: str, resume_epoch: int):
         """Log information about resuming training from a previous run."""
         try:
             api = wandb.Api()
@@ -871,27 +869,11 @@ class BaseNextTokenPipeline(ABC):
                 return
             
             # Get the final metrics from the previous run
-            final_history = target_run.history(keys=["loss", "val_loss", "lr", "step", "epoch"])
-            if len(final_history) > 0:
-                # Find the metrics at the resume epoch
-                epoch_metrics = final_history[final_history["epoch"] == resume_epoch]
-                if len(epoch_metrics) > 0:
-                    last_metrics = epoch_metrics.iloc[-1]
-                    
-                    # Log the resume information
-                    wandb.log({
-                        "resume_info/previous_run": run_name,
-                        "resume_info/resume_epoch": resume_epoch,
-                        "resume_info/previous_final_loss": last_metrics.get("loss", 0),
-                        "resume_info/previous_final_val_loss": last_metrics.get("val_loss", 0),
-                        "resume_info/previous_final_lr": last_metrics.get("lr", 0),
-                    }, step=int(last_metrics.get("step", 0)))
-                    
-                    print(f"Logged resume information from {run_name} at epoch {resume_epoch}")
-                else:
-                    print(f"No metrics found for epoch {resume_epoch} in run {run_name}")
-            else:
-                print(f"No history found for run {run_name}")
+            final_history = target_run.scan_history()
+            print("Logging resume information for run:", run_name)
+            for row in final_history:
+                logs = {k: v for k, v in row.items() if k[0] != "_" and v is not None}
+                wandb_run.log(logs)
                 
         except Exception as e:
             print(f"Error logging resume info for run {run_name}: {e}")
@@ -1063,12 +1045,12 @@ class BaseNextTokenPipeline(ABC):
             # Update the train_id to indicate this is a resumed run
             self.train_id = f"resume_{run_name}_from_epoch_{epoch}_{time.strftime('%Y-%m-%d_%H-%M-%S')}"
             # Store resume information for wandb logging
-            self._resume_from_run = run_name
-            self._resume_from_epoch = epoch
+            self.train_config.resume_from_run = run_name
+            self.train_config.resume_from_epoch = epoch
         else:
             # For new training, the train_id will be set in the train() method
-            self._resume_from_run = None
-            self._resume_from_epoch = None
+            self.train_config.resume_from_run = None
+            self.train_config.resume_from_epoch = None
         
         try:
             # Start training
