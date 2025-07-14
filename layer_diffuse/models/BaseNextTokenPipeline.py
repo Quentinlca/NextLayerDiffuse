@@ -859,6 +859,7 @@ class BaseNextTokenPipeline(ABC):
     def _log_resume_info(self, wandb_run,run_name: str, resume_epoch: int):
         """Log information about resuming training from a previous run."""
         try:
+            self.repo.git_checkout(revision=self.train_id, create_branch_ok=True) # type: ignore
             api = wandb.Api()
             # Find the run in the project
             runs = api.runs(self.train_config.wandb_project_name)
@@ -883,7 +884,6 @@ class BaseNextTokenPipeline(ABC):
                     image_data = row['sample_images']
                     logs = {}
                     if isinstance(image_data, dict) and 'path' in image_data:
-                        self.repo.git_checkout(revision=self.train_id, create_branch_ok=True) # type: ignore
                         img = target_run.file(image_data['path']).download(root=f'layer_diffuse/{self.train_config.output_dir}', replace=True)
                         img.close()  # Ensure the file is closed before proceeding
                         img_path = os.path.join(f"layer_diffuse/{self.train_config.output_dir}/{image_data['path']}")
@@ -891,7 +891,8 @@ class BaseNextTokenPipeline(ABC):
                         
                         shutil.move(img_path, new_file_path)
                         # shutil.rmtree(f"{self.train_config.output_dir}/media", ignore_errors=True)
-                        
+                        self.repo.push_to_hub(commit_message=f"Sample images for epoch {row['epoch']}") # type: ignore
+
                         logs = {
                             "sample_images": wandb.Image(
                                 new_file_path, caption=image_data.get('caption', f"Epoch {row['epoch']} samples")
@@ -901,9 +902,6 @@ class BaseNextTokenPipeline(ABC):
                         }
                         if row['step'] is not None:
                             logs['step'] = row['step']
-                        self.repo.push_to_hub(commit_message=f"Sample images for epoch {row['epoch']}") # type: ignore
-                        self.repo.git_checkout(revision='main', create_branch_ok=True) # type: ignore
-                        
                 else:
                     logs = {k: v for k, v in row.items() if k[0] != "_" and v is not None}
                 if logs:
@@ -911,6 +909,8 @@ class BaseNextTokenPipeline(ABC):
                 if 'step' in row and row['step'] is not None:
                     global_step = row['step']
             self.train_config.resume_step = global_step
+            self.repo.git_checkout(revision='main', create_branch_ok=True) # type: ignore
+                        
 
         except Exception as e:
             print(f"Error logging resume info for run {run_name}: {e}")
