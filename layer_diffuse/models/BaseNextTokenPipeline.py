@@ -571,6 +571,7 @@ class BaseNextTokenPipeline(ABC):
                     FID_score = self.get_FID_score(
                         dataloader=val_dataloader,
                         num_inference_steps=self.inference_config.num_inference_steps,
+                        eval_size=val_size,
                     )
                     logs["FID_score"] = FID_score
                 wandb.log(logs)
@@ -721,7 +722,7 @@ class BaseNextTokenPipeline(ABC):
         self.unet.config["num_class_embeds"] = num_class_embeds
         self.model_config.config["num_class_embeds"] = num_class_embeds
 
-    def get_FID_score(self, dataloader, num_inference_steps: int = 0):
+    def get_FID_score(self, dataloader, num_inference_steps: int = 0, eval_size:int=100):
         """Compute the FID score of the model on the given dataloader."""
         if num_inference_steps == 0:
             num_inference_steps = self.inference_config.num_inference_steps
@@ -731,7 +732,9 @@ class BaseNextTokenPipeline(ABC):
         )
 
         # Loop through the dataloader and accumulate FID statistics
-        for batch in tqdm(dataloader, desc="Calculating FID score", unit="batch"):
+        for i, batch in tqdm(enumerate(dataloader), desc="Calculating FID score", unit="batch", total=eval_size):
+            if i >= eval_size:
+                break
             input_images = batch["input"]
             target_images = batch["target"].to(self.device)
             labels = batch["label"]
