@@ -881,6 +881,7 @@ class BaseNextTokenPipeline(ABC):
                     break
                 if 'sample_images' in row and row['sample_images'] is not None:
                     image_data = row['sample_images']
+                    logs = {}
                     if isinstance(image_data, dict) and 'path' in image_data:
                         self.repo.git_checkout(revision=self.train_id, create_branch_ok=True) # type: ignore
                         img = target_run.file(image_data['path']).download(root=f'layer_diffuse/{self.train_config.output_dir}', replace=True)
@@ -890,22 +891,23 @@ class BaseNextTokenPipeline(ABC):
                         
                         shutil.move(img_path, new_file_path)
                         # shutil.rmtree(f"{self.train_config.output_dir}/media", ignore_errors=True)
+                        
+                        logs = {
+                            "sample_images": wandb.Image(
+                                new_file_path, caption=image_data.get('caption', f"Epoch {row['epoch']} samples")
+                            ),
+                            "epoch": row['epoch'],
+                            "_step": row.get('_step'),
+                        }
+                        if row['step'] is not None:
+                            logs['step'] = row['step']
                         self.repo.push_to_hub(commit_message=f"Sample images for epoch {row['epoch']}") # type: ignore
                         self.repo.git_checkout(revision='main', create_branch_ok=True) # type: ignore
                         
-                    logs = {
-                        "sample_images": wandb.Image(
-                            new_file_path, caption=image_data.get('caption', f"Epoch {row['epoch']} samples")
-                        ),
-                        "epoch": row['epoch'],
-                        "_step": row.get('_step'),
-                    }
-                    if row['step'] is not None:
-                        logs['step'] = row['step']
-                        
                 else:
                     logs = {k: v for k, v in row.items() if k[0] != "_" and v is not None}
-                wandb_run.log(logs)
+                if logs:
+                    wandb_run.log(logs)
                 if 'step' in row and row['step'] is not None:
                     global_step = row['step']
             self.train_config.resume_step = global_step
