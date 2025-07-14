@@ -871,7 +871,7 @@ class BaseNextTokenPipeline(ABC):
             if target_run is None:
                 print(f"Run {run_name} not found in wandb project {self.train_config.wandb_project_name}")
                 return
-            
+            global_step = 0
             # Get the final metrics from the previous run
             print("Retrieving final metrics from run:", run_name)
             final_history = target_run.scan_history()
@@ -889,8 +889,9 @@ class BaseNextTokenPipeline(ABC):
                         new_file_path = f"{self.train_config.output_dir}/result_epoch_{row['epoch']}.png"
                         
                         shutil.move(img_path, new_file_path)
-                        shutil.rmtree(f"{self.train_config.output_dir}/media", ignore_errors=False)
+                        # shutil.rmtree(f"{self.train_config.output_dir}/media", ignore_errors=True)
                         self.repo.push_to_hub(commit_message=f"Sample images for epoch {row['epoch']}") # type: ignore
+                        self.repo.git_checkout(revision='main', create_branch_ok=True) # type: ignore
                         
                     logs = {
                         "sample_images": wandb.Image(
@@ -899,12 +900,15 @@ class BaseNextTokenPipeline(ABC):
                         "epoch": row['epoch'],
                         "_step": row.get('_step'),
                     }
-                    if 'step' in row:
+                    if row['step'] is not None:
                         logs['step'] = row['step']
+                        
                 else:
                     logs = {k: v for k, v in row.items() if k[0] != "_" and v is not None}
                 wandb_run.log(logs)
-            self.train_config.resume_step = row.get('step', 1) - 1
+                if 'step' in row and row['step'] is not None:
+                    global_step = row['step']
+            self.train_config.resume_step = global_step
 
         except Exception as e:
             print(f"Error logging resume info for run {run_name}: {e}")
