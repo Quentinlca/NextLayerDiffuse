@@ -54,6 +54,7 @@ class BaseTrainingConfig:
     FID_eval_steps = 3
     resume_from_run: Optional[str] = None  # Run ID to resume from
     resume_from_epoch: Optional[int] = None  # Epoch to resume from
+    resume_step: Optional[int] = None  # Step to resume from
 
     def get_dict(self):
         return {
@@ -384,7 +385,7 @@ class BaseNextTokenPipeline(ABC):
 
         # Initialize global_step - continue from previous training if resumed
         if self.train_config.resume_from_run is not None:
-            global_step = self._get_last_step_from_run(self.train_config.resume_from_run) + 1
+            global_step = self.train_config.resume_step + 1 if self.train_config.resume_step is not None else 0
             global_epoch = self.train_config.resume_from_epoch + 1 if self.train_config.resume_from_epoch is not None else 0
             print(f"Resuming from global step: {global_step}")
         else:
@@ -873,9 +874,12 @@ class BaseNextTokenPipeline(ABC):
             final_history = target_run.scan_history()
             print("Logging resume information for run:", run_name)
             for row in final_history:
-                logs = {k: v for k, v in row.items() if k[0] != "_" and v is not None and int(row['epoch']) <= resume_epoch}
+                if row['epoch'] is None or int(row['epoch']) > resume_epoch:
+                    break
+                logs = {k: v for k, v in row.items() if k[0] != "_" and v is not None}
                 wandb_run.log(logs)
-                
+            self.train_config.resume_step = row.get('step', 1) - 1
+
         except Exception as e:
             print(f"Error logging resume info for run {run_name}: {e}")
 
@@ -901,7 +905,7 @@ class BaseNextTokenPipeline(ABC):
             print(f"Error retrieving wandb run ID for run {run_name}: {e}")
             return None
 
-    def _get_last_step_from_run(self, run_name: str) -> int:
+    def _get_last_step_from_run(self, run_name: str, resume_epoch: int) -> int:
         """Get the last global step from a previous training run using wandb."""
         try:
             api = wandb.Api()
