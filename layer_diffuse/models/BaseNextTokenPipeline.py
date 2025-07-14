@@ -338,10 +338,10 @@ class BaseNextTokenPipeline(ABC):
         )
         
         # Log resume information if this is a resumed training
-        if self._resume_from_run is not None and self._resume_from_epoch is not None:
+        if self.train_config.resume_from_run is not None and self.train_config.resume_from_epoch is not None:
             self._log_resume_info(wandb_run=wandb_run, 
-                                  run_name=self._resume_from_run, 
-                                  resume_epoch=self._resume_from_epoch)
+                                  run_name=self.train_config.resume_from_run, 
+                                  resume_epoch=self.train_config.resume_from_epoch)
 
         # Create the optimizer and learning rate scheduler
         optimizer = torch.optim.AdamW(
