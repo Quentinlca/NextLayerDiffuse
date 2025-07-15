@@ -57,7 +57,7 @@ class BaseTrainingConfig:
     resume_from_run: Optional[str] = None  # Run ID to resume from
     resume_from_epoch: Optional[int] = None  # Epoch to resume from
     resume_step: Optional[int] = None  # Step to resume from
-
+    
     def get_dict(self):
         return {
             attribute: getattr(self, attribute)
@@ -345,7 +345,13 @@ class BaseNextTokenPipeline(ABC):
             self._log_resume_info(wandb_run=wandb_run, 
                                   run_name=self.train_config.resume_from_run, 
                                   resume_epoch=self.train_config.resume_from_epoch)
-
+            global_step = self.train_config.resume_step + 1 if self.train_config.resume_step is not None else 0
+            global_epoch = self.train_config.resume_from_epoch + 1 if self.train_config.resume_from_epoch is not None else 0
+            wandb_run.config["train_config"]['resume_step'] = global_step
+            print(f"Resuming from global step: {global_step}")
+        else:
+            global_step = 0
+            global_epoch = 0
         # Create the optimizer and learning rate scheduler
         optimizer = torch.optim.AdamW(
             self.unet.parameters(), lr=self.train_config.learning_rate
@@ -385,16 +391,6 @@ class BaseNextTokenPipeline(ABC):
             )
         )
 
-        # Initialize global_step - continue from previous training if resumed
-        if self.train_config.resume_from_run is not None:
-            global_step = self.train_config.resume_step + 1 if self.train_config.resume_step is not None else 0
-            global_epoch = self.train_config.resume_from_epoch + 1 if self.train_config.resume_from_epoch is not None else 0
-            wandb_run.config["train_config"]['resume_step'] = global_step
-            print(f"Resuming from global step: {global_step}")
-        else:
-            global_step = 0
-            global_epoch = 0
-        
         nan_count = 0  # Counter for NaN occurrences
         max_nan_tolerance = 10  # Maximum number of NaN occurrences before stopping
 
@@ -967,7 +963,7 @@ class BaseNextTokenPipeline(ABC):
             print(f"Error retrieving step from wandb for run {run_name}: {e}")
             return 0
 
-    def _get_last_lr_from_run(self, run_name: str) -> Optional[float]:
+    def _get_last_lr_from_run(self, run_name: str, resume_epoch: int) -> Optional[float]:
         """Get the last learning rate from a previous training run using wandb."""
         try:
             api = wandb.Api()
@@ -984,14 +980,16 @@ class BaseNextTokenPipeline(ABC):
                 return None
             
             # Get the history and find the last learning rate
-            history = target_run.history(keys=["lr"])
-            if len(history) > 0:
-                last_lr = history.iloc[-1]["lr"]
-                print(f"Found last learning rate from run {run_name}: {last_lr}")
-                return float(last_lr)
-            else:
-                print(f"No learning rate history found for run {run_name}")
-                return None
+            final_history = target_run.scan_history()
+            for row in final_history:
+                if row['epoch'] is None or int(row['epoch']) > resume_epoch:
+                    break
+                if 'lr' in row and row['lr'] is not None:
+                    last_lr = row['lr']
+                    print(f"Found last learning rate from run {run_name}: {last_lr}")
+                    return float(last_lr)
+            print(f"No learning rate history found for run {run_name}")
+            return None
         except Exception as e:
             print(f"Error retrieving learning rate from wandb for run {run_name}: {e}")
             return None
@@ -1045,7 +1043,7 @@ class BaseNextTokenPipeline(ABC):
         # Handle learning rate
         if learning_rate is None:
             # Try to get the last learning rate from the previous run
-            last_lr = self._get_last_lr_from_run(run_name)
+            last_lr = self._get_last_lr_from_run(run_name, epoch)
             if last_lr is not None:
                 learning_rate = last_lr
             else:
