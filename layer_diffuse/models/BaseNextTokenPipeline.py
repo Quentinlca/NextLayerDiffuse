@@ -788,15 +788,44 @@ class BaseNextTokenPipeline(ABC):
         versions = []
         for branch in branches:
             if branch.name.startswith("run_"):
-                commits = [
-                    commit.title
+                epochs = [
+                    commit.title.split(' ')[-1]
                     for commit in huggingface_hub.list_repo_commits(
                         repo_id=self.train_config.hub_model_id, revision=branch.name
                     )
                     if commit.title.startswith("Model saved at")
                 ]
-                versions.append({"name": branch.name, "commits": commits})
+                if epochs:
+                    epochs = [int(epoch) for epoch in epochs]
+                    epochs.sort()
+                    versions.append({"name": branch.name, "epochs": epochs})
         return versions
+    
+    @staticmethod
+    def get_model_versions(model_repo_name:str)-> list[Dict[str, Any]]:
+        """Get the available model versions for a specific model type."""
+        try:
+            branches = huggingface_hub.list_repo_refs(
+                repo_id=model_repo_name
+            ).branches
+            versions = []
+            for branch in branches:
+                if branch.name.startswith("run_"):
+                    epochs = [
+                        commit.title.split(' ')[-1]
+                        for commit in huggingface_hub.list_repo_commits(
+                            repo_id=model_repo_name, revision=branch.name
+                        )
+                        if commit.title.startswith("Model saved at")
+                    ]
+                    if epochs:
+                        epochs = [int(epoch) for epoch in epochs]
+                        epochs.sort()
+                        versions.append({"name": branch.name, "epochs": epochs})
+            return versions
+        except Exception as e:
+            print(f"Error fetching model versions: {e}")
+            return []
 
     def set_num_class_embeds(self, num_class_embeds: int):
         """Set the class vocabulary for the model."""

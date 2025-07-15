@@ -6,6 +6,8 @@ from torchvision import transforms
 import os
 from PIL import Image
 from numpy import random
+import requests
+import json
 
 
 class ShuffleDataset(torch.utils.data.IterableDataset):
@@ -65,13 +67,31 @@ class ModularCharactersDataLoader(torch.utils.data.DataLoader):
         )
         self.dataset_name = dataset_name
         self.split = split
-
-        assert not (isinstance(dataset, IterableDataset) and not vocab), "If the dataset is an IterableDataset, vocab must be provided."
+        
         if not vocab:
-            vocab = dataset["prompt"]  # type: ignore
-            vocab = list(dict.fromkeys(dataset["prompt"]))  # type: ignore
-            vocab = sorted(vocab)  # type: ignore
-            self.vocab = dict(zip(vocab, range(len(vocab))))
+            try:
+                assert hasattr(dataset, "description") and isinstance(dataset.description, dict), "Dataset description must be a dictionary." # type: ignore
+                vocab_file_url = dataset.description.get('vocab-url', None) # type: ignore
+                if not vocab_file_url:
+                    raise ValueError("Vocab file URL not found in dataset description.")
+                cache_dir = "cache/vocab"
+                os.makedirs(cache_dir, exist_ok=True)
+                vocab_filename = f"{cache_dir}/vocab_{self.dataset_name.split('/')[-1]}_{self.split}.json"
+
+                if vocab_file_url and vocab_file_url.startswith("http"):
+                    response = requests.get(vocab_file_url)
+                    with open(vocab_filename, "w", encoding="utf-8") as f:
+                        f.write(response.content.decode("utf-8"))
+                    with open(vocab_filename, "r", encoding="utf-8") as f:
+                        vocab = json.load(f)
+            except:
+                if isinstance(dataset, IterableDataset):
+                    raise AssertionError("Vocab file URL not found in dataset description. If using an IterableDataset, vocab must be provided.")
+                else:
+                    vocab = dataset["prompt"]  # type: ignore
+                    vocab = list(dict.fromkeys(dataset["prompt"]))  # type: ignore
+                    vocab = sorted(vocab)  # type: ignore
+                    self.vocab = dict(zip(vocab, range(len(vocab))))
         else:
             self.vocab = vocab
 
