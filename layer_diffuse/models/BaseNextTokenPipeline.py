@@ -44,7 +44,7 @@ class BaseTrainingConfig:
     learning_rate = 2e-4
     lr_warmup_steps = 1000
     save_image_epochs = 1
-    save_model_epochs = 3
+    save_model_epochs = 1
     seed = 0
     train_size = 2000  # Number of batch samples to train on
     val_size = 1000  # Number of batch samples to validate on
