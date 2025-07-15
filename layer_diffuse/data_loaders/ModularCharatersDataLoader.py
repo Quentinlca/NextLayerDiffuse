@@ -65,6 +65,8 @@ class ModularCharactersDataLoader(torch.utils.data.DataLoader):
         )
         self.dataset_name = dataset_name
         self.split = split
+
+        assert not (isinstance(dataset, IterableDataset) and not vocab), "If the dataset is an IterableDataset, vocab must be provided."
         if not vocab:
             vocab = dataset["prompt"]  # type: ignore
             vocab = list(dict.fromkeys(dataset["prompt"]))  # type: ignore
