@@ -54,6 +54,8 @@ class BaseTrainingConfig:
     hub_model_id = ""  # to be set by subclasses
     wandb_project_name = ""  # to be set by subclasses
     FID_eval_steps = 3
+    loss_threshold_for_FID_eval = 1e-6
+    loss_threshold_passed = False  # Flag to check if the loss threshold for FID evaluation is passed
     resume_from_run: Optional[str] = None  # Run ID to resume from
     resume_from_epoch: Optional[int] = None  # Epoch to resume from
     resume_step: Optional[int] = None  # Step to resume from
@@ -419,6 +421,7 @@ class BaseNextTokenPipeline(ABC):
             progress_bar.set_description(f"Epoch {global_epoch}")
             self.unet.train()
             
+            # Training loop
             for step, batch in enumerate(train_dataloader):
                 if step >= train_size:
                     break
@@ -563,9 +566,11 @@ class BaseNextTokenPipeline(ABC):
                     loss = F.mse_loss(noise_pred, noise)
                     val_loss += loss.item()
                 val_loss /= val_size
+                if val_loss < self.train_config.loss_threshold_for_FID_eval:
+                    self.train_config.loss_threshold_passed = True
                 logs = {"val_loss": val_loss, "step": global_step, "epoch": global_epoch}
 
-                if self.train_config.FID_eval_steps > 0 and (global_epoch + 1) % self.train_config.FID_eval_steps == 0:
+                if self.train_config.loss_threshold_passed and self.train_config.FID_eval_steps > 0 and (global_epoch + 1) % self.train_config.FID_eval_steps == 0:
                     FID_score = self.get_FID_score(
                         dataloader=val_dataloader,
                         num_inference_steps=self.inference_config.num_inference_steps,
