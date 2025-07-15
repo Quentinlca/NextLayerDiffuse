@@ -639,6 +639,17 @@ class BaseNextTokenPipeline(ABC):
                         eval_size=self.train_config.FID_eval_size,
                     )
                     logs["FID_score"] = FID_score
+                    stats = {'FID_score': {'run': self.train_id,
+                                   'epoch': global_epoch,
+                                   'dataset_name': val_dataloader.dataset_name,
+                                   'split': val_dataloader.split,
+                                   'dataset_size': self.train_config.FID_eval_size* val_dataloader.batch_size,
+                                   'num_inference_steps': self.inference_config.num_inference_steps,
+                                   'FID_score': FID_score}} 
+                    if self.save_stats(stats=stats, run=self.train_id, epoch=global_epoch):
+                        print(f"Stats saved successfully for epoch {global_epoch}.")
+                    else:
+                        print(f"Failed to save stats for epoch {global_epoch}.")
                 wandb.log(logs)
                 accelerator.log(logs, step=global_step)
 
