@@ -9,6 +9,8 @@ import json
 from abc import ABC, abstractmethod
 from typing import Optional, Union, Dict, Any
 import huggingface_hub
+from datasets.iterable_dataset import IterableDataset
+
 
 from diffusers.optimization import get_cosine_schedule_with_warmup
 from accelerate import notebook_launcher, Accelerator
@@ -44,8 +46,8 @@ class BaseTrainingConfig:
     save_image_epochs = 1
     save_model_epochs = 3
     seed = 0
-    train_size = 2000 # Number of batch samples to train on
-    val_size = 1000 # Number of batch samples to validate on
+    train_size = 2000  # Number of batch samples to train on
+    val_size = 1000  # Number of batch samples to validate on
     FID_eval_size = 100
     mixed_precision = "fp16"  # `no` for float32, `fp16` for automatic mixed precision
     output_dir = ""  # to be set by subclasses
@@ -57,7 +59,7 @@ class BaseTrainingConfig:
     resume_from_run: Optional[str] = None  # Run ID to resume from
     resume_from_epoch: Optional[int] = None  # Epoch to resume from
     resume_step: Optional[int] = None  # Step to resume from
-    
+
     def get_dict(self):
         return {
             attribute: getattr(self, attribute)
@@ -66,7 +68,7 @@ class BaseTrainingConfig:
         }
 
 
-@dataclass 
+@dataclass
 class BaseInferenceConfig:
     num_inference_steps = 50  # number of denoising steps
 
@@ -82,7 +84,9 @@ class BaseModelConfig(dict):
     def __init__(self) -> None:
         self.config = {}
         self.config["sample_size"] = IMAGE_SIZE  # The size of the input
-        self.config["in_channels"] = 6  # Default: 6 channels (2 RGB images concatenated)
+        self.config["in_channels"] = (
+            6  # Default: 6 channels (2 RGB images concatenated)
+        )
         self.config["out_channels"] = 3  # Default: 3 channels for the output image
         self.config["down_block_types"] = (
             "DownBlock2D",  # a regular ResNet downsampling block
@@ -103,7 +107,9 @@ class BaseModelConfig(dict):
         self.config["block_out_channels"] = (128, 128, 256, 256, 512, 512)
         self.config["layers_per_block"] = 2
         self.config["class_embed_type"] = "identity"
-        self.config["num_class_embeds"] = 0  # Number of class embeddings, set to 0 for no class conditioning
+        self.config["num_class_embeds"] = (
+            0  # Number of class embeddings, set to 0 for no class conditioning
+        )
 
 
 class BaseSchedulerConfig(dict):
@@ -130,29 +136,39 @@ class BaseNextTokenPipeline(ABC):
         )
         self.train_id = ""
         self.model_version = ""
-        
+
         # Initialize resume tracking attributes
         self._resume_from_run: Optional[str] = None
         self._resume_from_epoch: Optional[int] = None
 
         # Set the configurations - to be customized by subclasses
         self.train_config = (
-            train_config if train_config is not None else self._get_default_train_config()
+            train_config
+            if train_config is not None
+            else self._get_default_train_config()
         )
-        self.model_config = model_config if model_config is not None else self._get_default_model_config()
+        self.model_config = (
+            model_config
+            if model_config is not None
+            else self._get_default_model_config()
+        )
         self.scheduler_config = (
-            scheduler_config if scheduler_config is not None else self._get_default_scheduler_config()
+            scheduler_config
+            if scheduler_config is not None
+            else self._get_default_scheduler_config()
         )
         self.inference_config = (
-            inference_config if inference_config is not None else self._get_default_inference_config()
+            inference_config
+            if inference_config is not None
+            else self._get_default_inference_config()
         )
 
         # Initialize model and scheduler - to be implemented by subclasses
         self.unet: UNet2DModel = self._create_unet()
         self.scheduler: Any = self._create_scheduler()
-        
+
         # Move model to device
-        self.unet = self.unet.to(self.device) # type: ignore
+        self.unet = self.unet.to(self.device)  # type: ignore
 
         # Initialize external services
         self._init_external_services()
@@ -213,15 +229,33 @@ class BaseNextTokenPipeline(ABC):
         """Save training samples for visualization."""
         if num_inference_steps == 0:
             num_inference_steps = self.inference_config.num_inference_steps
-
-        # random_sample_idx = torch.randint(
-        #     0, len(dataloader.dataset), (self.train_config.sample_size,), device=self.device, generator=generator
-        # )  # type: ignore
-        random_sample = dataloader.dataset[0: self.train_config.sample_size]
-
-        input_images = torch.stack(random_sample["input"])
-        target_images = torch.stack(random_sample["target"])
-        class_labels = torch.stack(random_sample["label"])
+        if isinstance(dataloader.dataset, torch.utils.data.IterableDataset):
+            random_sample = {}
+            for batch in dataloader:
+                if not random_sample:
+                    random_sample = batch
+                if len(random_sample["input"]) > self.train_config.sample_size:
+                    random_sample = {
+                        k: v[: self.train_config.sample_size]
+                        for k, v in random_sample.items()
+                    }
+                    break
+                else:
+                    random_sample = {
+                        k: torch.concat([random_sample[k], v], dim=0)
+                        for k, v in batch.items()
+                    }
+            if not random_sample:
+                raise ValueError("No data found in the dataloader.")
+            else:
+                input_images = random_sample["input"]
+                target_images = random_sample["target"]
+                class_labels = random_sample["label"]
+        else:
+            random_sample = dataloader.dataset[: self.train_config.sample_size]
+            input_images = torch.stack(random_sample["input"])
+            target_images = torch.stack(random_sample["target"])
+            class_labels = torch.stack(random_sample["label"])
 
         output_images = self.__call__(input_images, class_labels, num_inference_steps)
 
@@ -252,7 +286,7 @@ class BaseNextTokenPipeline(ABC):
         concat = torch.concat([input_images, output_images, target_images])
         grid = make_grid(concat, nrow=input_images.shape[0])
         img = torchvision.transforms.ToPILImage()(grid)
-        
+
         if self.train_config.push_to_hub and self.repo is not None:
             print(f"Saving sample images to {self.train_config.output_dir} ...")
             self.repo.git_checkout(revision=self.train_id, create_branch_ok=True)
@@ -279,6 +313,7 @@ class BaseNextTokenPipeline(ABC):
         self, train_dataloader, val_dataloader, train_size=1000, val_size=100, **params
     ):
         """Launch training with accelerate."""
+
         # Pass the parameters as keyword arguments to the train method
         def train_wrapper():
             return self.train(
@@ -315,7 +350,7 @@ class BaseNextTokenPipeline(ABC):
             "Lr_scheduler": "Cosine with warmup",
             "other_params": params,
         }
-        
+
         # Add resume information to config if this is a resumed run
         wandb_resume = None
         if self.train_config.resume_from_run is not None:
@@ -325,9 +360,11 @@ class BaseNextTokenPipeline(ABC):
                 train_tags.append("resumed_training")
             else:
                 train_tags = ["resumed_training"]
-            
+
             # Try to get the previous wandb run ID for potential resuming
-            previous_run_id = self._get_wandb_run_id_from_run(self.train_config.resume_from_run)
+            previous_run_id = self._get_wandb_run_id_from_run(
+                self.train_config.resume_from_run
+            )
             if previous_run_id:
                 # Note: We create a new run but link it to the previous one in the config
                 wandb_config["previous_wandb_run_id"] = previous_run_id
@@ -339,26 +376,40 @@ class BaseNextTokenPipeline(ABC):
             config=wandb_config,
             resume=wandb_resume,
         )
-        
+
         # Log resume information if this is a resumed training
-        if self.train_config.resume_from_run is not None and self.train_config.resume_from_epoch is not None:
-            self._log_resume_info(wandb_run=wandb_run, 
-                                  run_name=self.train_config.resume_from_run, 
-                                  resume_epoch=self.train_config.resume_from_epoch)
-            global_step = self.train_config.resume_step + 1 if self.train_config.resume_step is not None else 0
-            global_epoch = self.train_config.resume_from_epoch + 1 if self.train_config.resume_from_epoch is not None else 0
-            wandb_run.config["train_config"]['resume_step'] = global_step
+        if (
+            self.train_config.resume_from_run is not None
+            and self.train_config.resume_from_epoch is not None
+        ):
+            self._log_resume_info(
+                wandb_run=wandb_run,
+                run_name=self.train_config.resume_from_run,
+                resume_epoch=self.train_config.resume_from_epoch,
+            )
+            global_step = (
+                self.train_config.resume_step + 1
+                if self.train_config.resume_step is not None
+                else 0
+            )
+            global_epoch = (
+                self.train_config.resume_from_epoch + 1
+                if self.train_config.resume_from_epoch is not None
+                else 0
+            )
+            wandb_run.config["train_config"]["resume_step"] = global_step
             print(f"Resuming from global step: {global_step}")
         else:
             global_step = 0
             global_epoch = 0
         # Create the optimizer and learning rate scheduler
         optimizer = torch.optim.AdamW(
-            self.unet.parameters(), lr=self.train_config.learning_rate
+            self.unet.parameters(), lr=self.train_config.learning_rate  # type: ignore
         )
         lr_scheduler = get_cosine_schedule_with_warmup(
             optimizer=optimizer,
-            num_warmup_steps=self.train_config.lr_warmup_steps // self.train_config.gradient_accumulation_steps,
+            num_warmup_steps=self.train_config.lr_warmup_steps
+            // self.train_config.gradient_accumulation_steps,
             num_training_steps=(
                 train_size
                 * self.train_config.num_epochs
@@ -418,11 +469,11 @@ class BaseNextTokenPipeline(ABC):
             )
             progress_bar.set_description(f"Epoch {global_epoch}")
             self.unet.train()
-            
+
             for step, batch in enumerate(train_dataloader):
                 if step >= train_size:
                     break
-                
+
                 input_images = batch["input"].to(self.device)
                 target_images = batch["target"].to(self.device)
                 class_labels = batch["label"].to(self.device)
@@ -457,7 +508,9 @@ class BaseNextTokenPipeline(ABC):
 
                 with accelerator.accumulate(self.unet):
                     # Predict the noise residual - this may be overridden by subclasses
-                    noise_pred = self._forward_unet(input_images, noisy_targets, timesteps, class_labels)
+                    noise_pred = self._forward_unet(
+                        input_images, noisy_targets, timesteps, class_labels
+                    )
                     loss = F.mse_loss(noise_pred, noise)
 
                     # Check for NaN loss and skip this batch if detected
@@ -524,8 +577,7 @@ class BaseNextTokenPipeline(ABC):
                     "step": global_step,
                     "epoch": global_epoch,
                 }
-            
-                
+
                 progress_bar.set_postfix(**logs)
                 accelerator.log(logs, step=global_step)
                 global_step += 1
@@ -537,7 +589,9 @@ class BaseNextTokenPipeline(ABC):
             with torch.no_grad():
                 val_loss = 0.0
                 self.unet.eval()
-                for step,batch in tqdm(enumerate(val_dataloader), desc="Evaluating", unit="batch"):
+                for step, batch in tqdm(
+                    enumerate(val_dataloader), desc="Evaluating", unit="batch"
+                ):
                     if step >= val_size:
                         break
                     input_images = batch["input"].to(self.device)
@@ -559,13 +613,22 @@ class BaseNextTokenPipeline(ABC):
                     # Add noise to the clean images according to the noise magnitude at each timestep
                     noisy_targets = self.scheduler.add_noise(target_images, noise, timesteps)  # type: ignore
                     # Predict the noise residual
-                    noise_pred = self._forward_unet(input_images, noisy_targets, timesteps, class_labels)
+                    noise_pred = self._forward_unet(
+                        input_images, noisy_targets, timesteps, class_labels
+                    )
                     loss = F.mse_loss(noise_pred, noise)
                     val_loss += loss.item()
                 val_loss /= val_size
-                logs = {"val_loss": val_loss, "step": global_step, "epoch": global_epoch}
+                logs = {
+                    "val_loss": val_loss,
+                    "step": global_step,
+                    "epoch": global_epoch,
+                }
 
-                if self.train_config.FID_eval_steps > 0 and (global_epoch + 1) % self.train_config.FID_eval_steps == 0:
+                if (
+                    self.train_config.FID_eval_steps > 0
+                    and (global_epoch + 1) % self.train_config.FID_eval_steps == 0
+                ):
                     FID_score = self.get_FID_score(
                         dataloader=val_dataloader,
                         num_inference_steps=self.inference_config.num_inference_steps,
@@ -574,7 +637,6 @@ class BaseNextTokenPipeline(ABC):
                     logs["FID_score"] = FID_score
                 wandb.log(logs)
                 accelerator.log(logs, step=global_step)
-                
 
             # Saving the model and images
             if accelerator.is_main_process:
@@ -608,8 +670,13 @@ class BaseNextTokenPipeline(ABC):
         self.log_training_summary()
 
     @abstractmethod
-    def _forward_unet(self, input_images: torch.Tensor, noisy_targets: torch.Tensor, 
-                     timesteps: torch.Tensor, class_labels: torch.Tensor) -> torch.Tensor:
+    def _forward_unet(
+        self,
+        input_images: torch.Tensor,
+        noisy_targets: torch.Tensor,
+        timesteps: torch.Tensor,
+        class_labels: torch.Tensor,
+    ) -> torch.Tensor:
         """Forward pass through the UNet. May be overridden by subclasses."""
         pass
 
@@ -721,7 +788,9 @@ class BaseNextTokenPipeline(ABC):
         self.unet.config["num_class_embeds"] = num_class_embeds
         self.model_config.config["num_class_embeds"] = num_class_embeds
 
-    def get_FID_score(self, dataloader, num_inference_steps: int = 0, eval_size:int=100):
+    def get_FID_score(
+        self, dataloader, num_inference_steps: int = 0, eval_size: int = 100
+    ):
         """Compute the FID score of the model on the given dataloader."""
         if num_inference_steps == 0:
             num_inference_steps = self.inference_config.num_inference_steps
@@ -731,7 +800,12 @@ class BaseNextTokenPipeline(ABC):
         )
 
         # Loop through the dataloader and accumulate FID statistics
-        for i, batch in tqdm(enumerate(dataloader), desc="Calculating FID score", unit="batch", total=eval_size):
+        for i, batch in tqdm(
+            enumerate(dataloader),
+            desc="Calculating FID score",
+            unit="batch",
+            total=eval_size,
+        ):
             if i >= eval_size:
                 break
             input_images = batch["input"]
@@ -766,7 +840,9 @@ class BaseNextTokenPipeline(ABC):
         with open(stats_path, "w") as f:
             json.dump(existing_stats, f, indent=4)
 
-        commit_message = f"Saved training statistics for model version {run}_epoch_{epoch}."
+        commit_message = (
+            f"Saved training statistics for model version {run}_epoch_{epoch}."
+        )
         response = self.repo.push_to_hub(
             commit_message=commit_message,
         )
@@ -800,6 +876,7 @@ class BaseNextTokenPipeline(ABC):
         """Initialize external services like wandb and huggingface hub"""
         try:
             import wandb
+
             wandb.login(
                 key=os.environ.get("WANDB_API_KEY")
             )  # Ensure you have your WANDB_API_KEY set in your environment
@@ -817,20 +894,20 @@ class BaseNextTokenPipeline(ABC):
                 "Failed to login to Hugging Face Hub. Please ensure you have your HUGGINGFACE_HUB_TOKEN set in your environment."
             )
             raise e
-    
+
     def _init_repository(self):
         """Initialize the repository for saving models"""
         # Set the hub model ID based on the username and model name
         try:
-            username = huggingface_hub.whoami()['name']
+            username = huggingface_hub.whoami()["name"]
             if not self.train_config.hub_model_id:
                 self.train_config.hub_model_id = f"{username}/{self.__class__.__name__}"
         except:
             print("Warning: Could not get username from HuggingFace Hub")
-        
+
         if not os.path.exists(self.train_config.output_dir):
             os.makedirs(self.train_config.output_dir)
-        
+
         # Initialize repo only if pushing to hub is enabled
         if self.train_config.push_to_hub:
             if not huggingface_hub.repo_exists(self.train_config.hub_model_id):
@@ -853,10 +930,10 @@ class BaseNextTokenPipeline(ABC):
         else:
             self.repo = None
 
-    def _log_resume_info(self, wandb_run,run_name: str, resume_epoch: int):
+    def _log_resume_info(self, wandb_run, run_name: str, resume_epoch: int):
         """Log information about resuming training from a previous run."""
         try:
-            self.repo.git_checkout(revision=self.train_id, create_branch_ok=True) # type: ignore
+            self.repo.git_checkout(revision=self.train_id, create_branch_ok=True)  # type: ignore
             api = wandb.Api()
             # Find the run in the project
             runs = api.runs(self.train_config.wandb_project_name)
@@ -865,9 +942,11 @@ class BaseNextTokenPipeline(ABC):
                 if run.name == run_name:
                     target_run = run
                     break
-            
+
             if target_run is None:
-                print(f"Run {run_name} not found in wandb project {self.train_config.wandb_project_name}")
+                print(
+                    f"Run {run_name} not found in wandb project {self.train_config.wandb_project_name}"
+                )
                 return
             global_step = 0
             # Get the final metrics from the previous run
@@ -875,39 +954,48 @@ class BaseNextTokenPipeline(ABC):
             final_history = target_run.scan_history()
             print("Logging resume information for run:", run_name)
             for row in final_history:
-                if row['epoch'] is None or int(row['epoch']) > resume_epoch:
+                if row["epoch"] is None or int(row["epoch"]) > resume_epoch:
                     break
-                if 'sample_images' in row and row['sample_images'] is not None:
-                    image_data = row['sample_images']
+                if "sample_images" in row and row["sample_images"] is not None:
+                    image_data = row["sample_images"]
                     logs = {}
-                    if isinstance(image_data, dict) and 'path' in image_data:
-                        img = target_run.file(image_data['path']).download(root=f'layer_diffuse/{self.train_config.output_dir}', replace=True)
+                    if isinstance(image_data, dict) and "path" in image_data:
+                        img = target_run.file(image_data["path"]).download(
+                            root=f"layer_diffuse/{self.train_config.output_dir}",
+                            replace=True,
+                        )
                         img.close()  # Ensure the file is closed before proceeding
-                        img_path = os.path.join(f"layer_diffuse/{self.train_config.output_dir}/{image_data['path']}")
+                        img_path = os.path.join(
+                            f"layer_diffuse/{self.train_config.output_dir}/{image_data['path']}"
+                        )
                         new_file_path = f"{self.train_config.output_dir}/result_epoch_{row['epoch']}.png"
-                        
+
                         shutil.move(img_path, new_file_path)
                         # shutil.rmtree(f"{self.train_config.output_dir}/media", ignore_errors=True)
-                        self.repo.push_to_hub(commit_message=f"Sample images for epoch {row['epoch']}") # type: ignore
+                        self.repo.push_to_hub(commit_message=f"Sample images for epoch {row['epoch']}")  # type: ignore
 
                         logs = {
                             "sample_images": wandb.Image(
-                                new_file_path, caption=image_data.get('caption', f"Epoch {row['epoch']} samples")
+                                new_file_path,
+                                caption=image_data.get(
+                                    "caption", f"Epoch {row['epoch']} samples"
+                                ),
                             ),
-                            "epoch": row['epoch'],
-                            "_step": row.get('_step'),
+                            "epoch": row["epoch"],
+                            "_step": row.get("_step"),
                         }
-                        if row['step'] is not None:
-                            logs['step'] = row['step']
+                        if row["step"] is not None:
+                            logs["step"] = row["step"]
                 else:
-                    logs = {k: v for k, v in row.items() if k[0] != "_" and v is not None}
+                    logs = {
+                        k: v for k, v in row.items() if k[0] != "_" and v is not None
+                    }
                 if logs:
                     wandb_run.log(logs)
-                if 'step' in row and row['step'] is not None:
-                    global_step = row['step']
+                if "step" in row and row["step"] is not None:
+                    global_step = row["step"]
             self.train_config.resume_step = global_step
-            self.repo.git_checkout(revision='main', create_branch_ok=True) # type: ignore
-                        
+            self.repo.git_checkout(revision="main", create_branch_ok=True)  # type: ignore
 
         except Exception as e:
             print(f"Error logging resume info for run {run_name}: {e}")
@@ -923,11 +1011,13 @@ class BaseNextTokenPipeline(ABC):
                 if run.name == run_name:
                     target_run = run
                     break
-            
+
             if target_run is None:
-                print(f"Run {run_name} not found in wandb project {self.train_config.wandb_project_name}")
+                print(
+                    f"Run {run_name} not found in wandb project {self.train_config.wandb_project_name}"
+                )
                 return None
-            
+
             print(f"Found wandb run ID for {run_name}: {target_run.id}")
             return target_run.id
         except Exception as e:
@@ -945,11 +1035,13 @@ class BaseNextTokenPipeline(ABC):
                 if run.name == run_name:
                     target_run = run
                     break
-            
+
             if target_run is None:
-                print(f"Run {run_name} not found in wandb project {self.train_config.wandb_project_name}")
+                print(
+                    f"Run {run_name} not found in wandb project {self.train_config.wandb_project_name}"
+                )
                 return 0
-            
+
             # Get the history and find the last step
             history = target_run.history(keys=["step"])
             if len(history) > 0:
@@ -963,7 +1055,9 @@ class BaseNextTokenPipeline(ABC):
             print(f"Error retrieving step from wandb for run {run_name}: {e}")
             return 0
 
-    def _get_last_lr_from_run(self, run_name: str, resume_epoch: int) -> Optional[float]:
+    def _get_last_lr_from_run(
+        self, run_name: str, resume_epoch: int
+    ) -> Optional[float]:
         """Get the last learning rate from a previous training run using wandb."""
         try:
             api = wandb.Api()
@@ -974,18 +1068,20 @@ class BaseNextTokenPipeline(ABC):
                 if run.name == run_name:
                     target_run = run
                     break
-            
+
             if target_run is None:
-                print(f"Run {run_name} not found in wandb project {self.train_config.wandb_project_name}")
+                print(
+                    f"Run {run_name} not found in wandb project {self.train_config.wandb_project_name}"
+                )
                 return None
-            
+
             # Get the history and find the last learning rate
             final_history = target_run.scan_history()
             for row in final_history:
-                if row['epoch'] is None or int(row['epoch']) > resume_epoch:
+                if row["epoch"] is None or int(row["epoch"]) > resume_epoch:
                     break
-                if 'lr' in row and row['lr'] is not None:
-                    last_lr = row['lr']
+                if "lr" in row and row["lr"] is not None:
+                    last_lr = row["lr"]
                     print(f"Found last learning rate from run {run_name}: {last_lr}")
                     return float(last_lr)
             print(f"No learning rate history found for run {run_name}")
@@ -995,21 +1091,21 @@ class BaseNextTokenPipeline(ABC):
             return None
 
     def resume_training(
-        self, 
-        run_name: str, 
-        epoch: int, 
-        train_dataloader, 
-        val_dataloader, 
-        train_size: int = 1000, 
+        self,
+        run_name: str,
+        epoch: int,
+        train_dataloader,
+        val_dataloader,
+        train_size: int = 1000,
         val_size: int = 100,
         learning_rate: Optional[float] = None,
         lr_warmup_steps: Optional[int] = None,
         num_epochs: Optional[int] = None,
-        **params
+        **params,
     ):
         """
         Resume training from a specific run and epoch, or start new training if model doesn't exist.
-        
+
         Args:
             run_name: Name of the run to resume from
             epoch: Epoch number to resume from
@@ -1023,7 +1119,7 @@ class BaseNextTokenPipeline(ABC):
             **params: Additional parameters passed to train method
         """
         print(f"Attempting to resume training from run: {run_name}, epoch: {epoch}")
-        
+
         # Try to load the model from the specified run and epoch
         model_loaded = False
         try:
@@ -1031,15 +1127,17 @@ class BaseNextTokenPipeline(ABC):
         except Exception as e:
             print(f"Failed to load model from hub: {e}")
             model_loaded = False
-        
+
         if not model_loaded:
-            print(f"Model from run {run_name} epoch {epoch} not found. Starting new training...")
+            print(
+                f"Model from run {run_name} epoch {epoch} not found. Starting new training..."
+            )
             # Reset to a fresh model
             self.unet = self._create_unet()
             self.unet = self.unet.to(self.device)  # type: ignore
         else:
             print(f"Successfully loaded model from run {run_name} epoch {epoch}")
-        
+
         # Handle learning rate
         if learning_rate is None:
             # Try to get the last learning rate from the previous run
@@ -1049,16 +1147,16 @@ class BaseNextTokenPipeline(ABC):
             else:
                 learning_rate = self.train_config.learning_rate
                 print(f"Using default learning rate: {learning_rate}")
-        
+
         # Update training config with new learning rate
         original_lr = self.train_config.learning_rate
         self.train_config.learning_rate = learning_rate
-        
+
         # Handle warmup steps
         if lr_warmup_steps is not None:
             original_warmup = self.train_config.lr_warmup_steps
             self.train_config.lr_warmup_steps = lr_warmup_steps
-        
+
         # Calculate epochs to train
         original_epochs = self.train_config.num_epochs
         if num_epochs is not None:
@@ -1068,14 +1166,16 @@ class BaseNextTokenPipeline(ABC):
         elif model_loaded:
             # Calculate remaining epochs from original configuration
             epochs_to_train = max(0, self.train_config.num_epochs - (epoch + 1))
-            print(f"Resuming training for {epochs_to_train} remaining epochs from original config")
+            print(
+                f"Resuming training for {epochs_to_train} remaining epochs from original config"
+            )
         else:
             # New training - use original epoch count
             epochs_to_train = self.train_config.num_epochs
             print(f"Starting fresh training for {epochs_to_train} epochs")
-        
+
         self.train_config.num_epochs = epochs_to_train
-        
+
         # Update the train_id appropriately
         if model_loaded:
             # Update the train_id to indicate this is a resumed run
@@ -1087,7 +1187,7 @@ class BaseNextTokenPipeline(ABC):
             # For new training, the train_id will be set in the train() method
             self.train_config.resume_from_run = None
             self.train_config.resume_from_epoch = None
-        
+
         try:
             # Start training
             self.train(train_dataloader, val_dataloader, train_size, val_size, **params)
@@ -1106,16 +1206,18 @@ class BaseNextTokenPipeline(ABC):
             "training_summary/total_epochs": self.train_config.num_epochs,
             "training_summary/final_lr": self.train_config.learning_rate,
         }
-        
+
         # Add resume information if this was a resumed training
-        if hasattr(self, '_resume_from_run') and self._resume_from_run is not None:
-            summary.update({
-                "training_summary/was_resumed": True,
-                "training_summary/resumed_from_run": self._resume_from_run,
-                "training_summary/resumed_from_epoch": self._resume_from_epoch,
-            })
+        if hasattr(self, "_resume_from_run") and self._resume_from_run is not None:
+            summary.update(
+                {
+                    "training_summary/was_resumed": True,
+                    "training_summary/resumed_from_run": self._resume_from_run,
+                    "training_summary/resumed_from_epoch": self._resume_from_epoch,
+                }
+            )
         else:
             summary["training_summary/was_resumed"] = False
-        
+
         wandb.log(summary)
         print(f"Training summary logged for run: {self.train_id}")
