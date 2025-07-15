@@ -845,6 +845,8 @@ class BaseNextTokenPipeline(ABC):
     def save_stats(self, stats: dict, run: str, epoch: int) -> bool:
         """Save the training statistics to a JSON file."""
         assert self.repo is not None, "Repository is not initialized."
+        previous_revision = self.repo.current_branch
+        
         self.repo.git_checkout(revision="main")
         stats_path = os.path.join(self.train_config.output_dir, "stats.json")
         existing_stats = []
@@ -858,15 +860,21 @@ class BaseNextTokenPipeline(ABC):
         commit_message = (
             f"Saved training statistics for model version {run}_epoch_{epoch}."
         )
+        
         response = self.repo.push_to_hub(
             commit_message=commit_message,
         )
+        
         if response is not None:
             print(
                 f"Stats saved to {self.train_config.hub_model_id} : {commit_message}."
             )
+            self.repo.git_checkout(revision=previous_revision)
+            self.repo.git_pull(rebase=True)  # Pull the latest changes from the hub
             return True
         else:
+            self.repo.git_checkout(revision=previous_revision)
+            self.repo.git_pull(rebase=True)
             return False
 
     def check_model_for_nan(self):
