@@ -469,7 +469,7 @@ class BaseNextTokenPipeline(ABC):
                 disable=not accelerator.is_local_main_process,
                 unit="batch",
             )
-            progress_bar.set_description(f"Epoch {global_epoch}")
+            progress_bar.set_description(f"Training epoch {global_epoch}")
             self.unet.train()
             
             # Training loop
@@ -588,13 +588,17 @@ class BaseNextTokenPipeline(ABC):
 
             self.model_version = f"{self.train_id}_epoch_{global_epoch}"
 
+            progress_bar_eval = tqdm(
+                total=val_size,
+                disable=not accelerator.is_local_main_process,
+                unit="batch",
+            )
+            progress_bar_eval.set_description(f"Evaluation epoch {global_epoch}")
             # Evaluation loop
             with torch.no_grad():
                 val_loss = 0.0
                 self.unet.eval()
-                for step, batch in tqdm(
-                    enumerate(val_dataloader), desc="Evaluating", unit="batch"
-                ):
+                for step, batch in enumerate(val_dataloader):
                     if step >= val_size:
                         break
                     input_images = batch["input"].to(self.device)
@@ -621,6 +625,8 @@ class BaseNextTokenPipeline(ABC):
                     )
                     loss = F.mse_loss(noise_pred, noise)
                     val_loss += loss.item()
+                    progress_bar_eval.set_postfix(**{"loss": loss.item(), "step": step, "epoch": global_epoch})
+                    progress_bar_eval.update(1)
                 val_loss /= val_size
                 if val_loss < self.train_config.loss_threshold_for_FID_eval:
                     self.train_config.loss_threshold_passed = True
