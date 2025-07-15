@@ -1129,15 +1129,18 @@ class BaseNextTokenPipeline(ABC):
 
             # Get the history and find the last learning rate
             final_history = target_run.scan_history()
+            last_lr = None
             for row in final_history:
                 if row["epoch"] is None or int(row["epoch"]) > resume_epoch:
                     break
                 if "lr" in row and row["lr"] is not None:
                     last_lr = row["lr"]
-                    print(f"Found last learning rate from run {run_name}: {last_lr}")
-                    return float(last_lr)
-            print(f"No learning rate history found for run {run_name}")
-            return None
+            if last_lr is not None:
+                print(f"Found last learning rate from run {run_name}: {last_lr}")
+                return float(last_lr)
+            else:
+                print(f"No learning rate history found for run {run_name}")
+                return None
         except Exception as e:
             print(f"Error retrieving learning rate from wandb for run {run_name}: {e}")
             return None
