@@ -56,7 +56,7 @@ class BaseTrainingConfig:
     hub_model_id = ""  # to be set by subclasses
     wandb_project_name = ""  # to be set by subclasses
     FID_eval_steps = 3
-    loss_threshold_for_FID_eval = 1e-6
+    loss_threshold_for_FID_eval = 2e-3
     loss_threshold_passed = False  # Flag to check if the loss threshold for FID evaluation is passed
     resume_from_run: Optional[str] = None  # Run ID to resume from
     resume_from_epoch: Optional[int] = None  # Epoch to resume from
