@@ -987,6 +987,9 @@ class BaseNextTokenPipeline(ABC):
                 print(
                     f"Created repository {self.train_config.hub_model_id} on Hugging Face Hub."
                 )
+            # reset repository
+            os.rmdir(self.train_config.output_dir) if os.path.exists(self.train_config.output_dir) else None
+            os.makedirs(self.train_config.output_dir, exist_ok=True)
             self.repo = huggingface_hub.Repository(
                 local_dir=self.train_config.output_dir,
                 clone_from=self.train_config.hub_model_id,
