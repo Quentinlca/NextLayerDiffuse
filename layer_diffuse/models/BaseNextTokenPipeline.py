@@ -993,7 +993,6 @@ class BaseNextTokenPipeline(ABC):
             # if os.path.exists(self.train_config.output_dir):
             #     shutil.rmtree(self.train_config.output_dir)
             # os.makedirs(self.train_config.output_dir, exist_ok=True)
-            huggingface_hub.repository.is_git_repo
             self.repo = huggingface_hub.Repository(
                 local_dir=self.train_config.output_dir,
                 clone_from=self.train_config.hub_model_id,
