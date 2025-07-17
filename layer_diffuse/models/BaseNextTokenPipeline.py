@@ -1274,7 +1274,7 @@ class BaseNextTokenPipeline(ABC):
 
         try:
             # Start training
-            self.train(train_dataloader, val_dataloader, train_size, val_size, **params)
+            self.train_accelerate(train_dataloader, val_dataloader, train_size, val_size, **params)
         finally:
             # Restore original config values
             self.train_config.learning_rate = original_lr
