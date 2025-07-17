@@ -787,7 +787,6 @@ class BaseNextTokenPipeline(ABC):
             return False
         try:
             self.repo.git_checkout(revision=revision, create_branch_ok=True)
-            self.repo.git_pull(rebase=True)  # Pull the latest changes from the hub
         except Exception as e:
             print(f"Failed to checkout revision {revision} for run {run}. Error: {e}")
             return False
