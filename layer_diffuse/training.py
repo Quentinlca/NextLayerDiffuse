@@ -175,23 +175,8 @@ def train_loop():
             with open(args.vocab_file, 'r') as f:
                 vocab = json.load(f)
         except FileNotFoundError:
-            print(f"Vocabulary file '{args.vocab_file}' not found. Attempting to load 'vocab.json'.")
-            try:
-                with open('vocab.json', 'r') as f:
-                    vocab = json.load(f)
-                print("Vocabulary loaded successfully from 'vocab.json'.")
-            except FileNotFoundError:
-                raise FileNotFoundError(f"Vocabulary file '{args.vocab_file}' not found and 'vocab.json' not found. Please provide a valid vocabulary file.")
+            print(f"Vocabulary file '{args.vocab_file}' not found. Attempting to load the vocab from the dataset description.")
     
-    if stream_dataset and not vocab:
-        print("Streaming activated but no vocabulary provided. Attempting to load vocabulary from 'vocab.json'.")
-        try:
-            with open('vocab.json', 'r') as f:
-                vocab = json.load(f)
-            print("Vocabulary loaded successfully from 'vocab.json'.")
-        except FileNotFoundError:
-            raise FileNotFoundError(f"No vocabulary file found 'vocab.json'. Please provide a valid vocabulary file or set streaming to False.")
-
     num_epochs = args.num_epochs
     lr = args.lr
     warming_steps = args.warming_steps
