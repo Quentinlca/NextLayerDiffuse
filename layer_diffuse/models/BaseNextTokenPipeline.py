@@ -332,6 +332,10 @@ class BaseNextTokenPipeline(ABC):
         self.set_num_class_embeds(len(train_dataloader.vocab))
         self.train_config.train_size = train_size
         self.train_config.val_size = val_size
+        
+        dataset_name = train_dataloader.dataset_name
+        train_split = train_dataloader.split
+        val_split = val_dataloader.split
 
         num_cycles = params.get("num_cycles", 0.5)
         train_tags = params.get("train_tags", None)
@@ -641,9 +645,9 @@ class BaseNextTokenPipeline(ABC):
                     logs["FID_score"] = FID_score
                     stats = {'FID_score': {'run': self.train_id,
                                    'epoch': global_epoch,
-                                   'dataset_name': val_dataloader.dataset_name,
-                                   'split': val_dataloader.split,
-                                   'dataset_size': self.train_config.FID_eval_size* val_dataloader.batch_size,
+                                   'dataset_name': dataset_name,
+                                   'split': val_split,
+                                   'dataset_size': self.train_config.FID_eval_size*val_dataloader.batch_size,
                                    'num_inference_steps': self.inference_config.num_inference_steps,
                                    'FID_score': FID_score}} 
                     if self.save_stats(stats=stats, run=self.train_id, epoch=global_epoch):
