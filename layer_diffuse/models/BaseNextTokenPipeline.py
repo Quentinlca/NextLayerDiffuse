@@ -1202,6 +1202,7 @@ class BaseNextTokenPipeline(ABC):
 
         # Try to load the model from the specified run and epoch
         assert self.repo is not None, "Repository is not initialized."
+        print(f"DEBUG Current branch: {self.repo.current_branch}")
         self.repo.git_checkout(revision="main", create_branch_ok=True)
         self.repo.git_pull(rebase=True)  # Pull the latest changes from the hub
         model_loaded = False
