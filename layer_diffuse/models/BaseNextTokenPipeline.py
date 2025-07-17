@@ -993,6 +993,7 @@ class BaseNextTokenPipeline(ABC):
                 git_user="QLeca",
                 git_email="quentin.leca@polytechnique.edu",
             )
+            self.repo.git_pull(rebase=False)
             self.repo.git_checkout(
                 revision="main", create_branch_ok=True
             )  # Checkout the main branch
