@@ -291,7 +291,6 @@ class BaseNextTokenPipeline(ABC):
 
         if self.train_config.push_to_hub and self.repo is not None:
             print(f"Saving sample images to {self.train_config.output_dir} ...")
-            previous_revision = self.repo.current_branch
             self.repo.git_checkout(revision=self.train_id, create_branch_ok=True)
             self.repo.git_pull(rebase=True)
             img.save(
@@ -301,7 +300,7 @@ class BaseNextTokenPipeline(ABC):
             )
             self.repo.push_to_hub(commit_message=f"Sample images for epoch {epoch}")
             img.close()
-            self.repo.git_checkout(revision=previous_revision, create_branch_ok=True)
+            self.repo.git_checkout(revision='main', create_branch_ok=True)
             self.repo.git_pull(rebase=True)
             return os.path.join(
                 self.train_config.output_dir, "result_epoch_{}.png".format(epoch)
@@ -332,7 +331,8 @@ class BaseNextTokenPipeline(ABC):
         self, train_dataloader, val_dataloader, train_size=1000, val_size=100, **params
     ):
         """Main training loop."""
-        self.train_id = f"run_{time.strftime('%Y-%m-%d_%H-%M-%S')}"
+        if not self.train_id:
+            self.train_id = f"run_{time.strftime('%Y-%m-%d_%H-%M-%S')}"
         self.set_num_class_embeds(len(train_dataloader.vocab))
         self.train_config.train_size = train_size
         self.train_config.val_size = val_size
@@ -439,12 +439,17 @@ class BaseNextTokenPipeline(ABC):
         # Create the repo if push_to_hub is enabled
         if accelerator.is_main_process:
             if self.train_config.push_to_hub and self.repo is not None:
+                self.repo.git_checkout(revision="main", create_branch_ok=True)
+                self.repo.git_pull(rebase=True)  # Pull the latest changes from the hub
                 print(
                     f"Creating branch {self.train_id} in repository {self.train_config.hub_model_id} ..."
                 )
                 # Create a new branch for this run with the name of the run
                 self.repo.git_checkout(revision=self.train_id, create_branch_ok=True)
                 self.repo.git_pull(rebase=True)
+                print(f"Created branch {self.train_id} in repository {self.train_config.hub_model_id}.")
+                self.repo.git_checkout(revision="main", create_branch_ok=True)
+                self.repo.git_pull(rebase=True)  # Pull the latest changes from the hub
 
         # Prepare everything
         self.unet, optimizer, train_dataloader, val_dataloader, lr_scheduler = (
@@ -708,7 +713,6 @@ class BaseNextTokenPipeline(ABC):
         """Save the model to hub or local directory."""
         commit_message = f"Model saved at epoch {epoch}"
         if self.train_config.push_to_hub and self.repo is not None:
-            previous_revision = self.repo.current_branch
             print(
                 f"Saving model to {self.train_config.output_dir} : {commit_message} ..."
             )
@@ -730,7 +734,7 @@ class BaseNextTokenPipeline(ABC):
                 self.unet.save_pretrained(save_dir, variant=f"epoch_{epoch}")
                 print(f"Model saved to {save_dir} : {commit_message}.")
                 
-            self.repo.git_checkout(revision=previous_revision)
+            self.repo.git_checkout(revision='main')
             self.repo.git_pull(rebase=True)  # Pull the latest changes from the hub
         else:
             save_dir = os.path.join(
@@ -760,7 +764,6 @@ class BaseNextTokenPipeline(ABC):
     def load_model_from_hub(self, run: str, epoch: int) -> bool:
         """Load model from Hugging Face Hub."""
         assert self.repo is not None, "Repository is not initialized."
-        previous_revision = self.repo.current_branch
         revision = None
         try:
             commits = [
@@ -891,9 +894,8 @@ class BaseNextTokenPipeline(ABC):
     def save_stats(self, stats: dict, run: str, epoch: int) -> bool:
         """Save the training statistics to a JSON file."""
         assert self.repo is not None, "Repository is not initialized."
-        previous_revision = self.repo.current_branch
         
-        self.repo.git_checkout(revision="main")
+        self.repo.git_checkout(revision="main", create_branch_ok=True)
         self.repo.git_pull(rebase=True)  # Pull the latest changes from the hub
         stats_path = os.path.join(self.train_config.output_dir, "stats.json")
         existing_stats = []
@@ -916,12 +918,12 @@ class BaseNextTokenPipeline(ABC):
             print(
                 f"Stats saved to {self.train_config.hub_model_id} : {commit_message}."
             )
-            self.repo.git_checkout(revision=previous_revision)
+            self.repo.git_checkout(revision="main", create_branch_ok=True)
             self.repo.git_pull(rebase=True)  # Pull the latest changes from the hub
             return True
         else:
-            self.repo.git_checkout(revision=previous_revision)
-            self.repo.git_pull(rebase=True)
+            self.repo.git_checkout(revision="main", create_branch_ok=True)
+            self.repo.git_pull(rebase=True)  # Pull the latest changes from the hub
             return False
 
     def check_model_for_nan(self):
@@ -991,7 +993,7 @@ class BaseNextTokenPipeline(ABC):
             # if os.path.exists(self.train_config.output_dir):
             #     shutil.rmtree(self.train_config.output_dir)
             # os.makedirs(self.train_config.output_dir, exist_ok=True)
-            
+            huggingface_hub.repository.is_git_repo
             self.repo = huggingface_hub.Repository(
                 local_dir=self.train_config.output_dir,
                 clone_from=self.train_config.hub_model_id,
@@ -1006,7 +1008,6 @@ class BaseNextTokenPipeline(ABC):
         """Log information about resuming training from a previous run."""
         try:
             assert self.repo is not None, "Repository is not initialized."
-            previous_revision = self.repo.current_branch
             self.repo.git_checkout(revision=self.train_id, create_branch_ok=True)
             self.repo.git_pull(rebase=True)  # Pull the latest changes from the hub
             api = wandb.Api()
@@ -1070,7 +1071,7 @@ class BaseNextTokenPipeline(ABC):
                 if "step" in row and row["step"] is not None:
                     global_step = row["step"]
             self.train_config.resume_step = global_step
-            self.repo.git_checkout(revision=previous_revision, create_branch_ok=True)
+            self.repo.git_checkout(revision='main', create_branch_ok=True)
             self.repo.git_pull(rebase=True)  # Pull the latest changes from the hub
 
         except Exception as e:
@@ -1197,8 +1198,8 @@ class BaseNextTokenPipeline(ABC):
             num_epochs: Number of epochs to train for. If None, uses remaining epochs from original config
             **params: Additional parameters passed to train method
         """
+        self.train_id = f"run_{time.strftime('%Y-%m-%d_%H-%M-%S')}"
         print(f"Attempting to resume training from run: {run_name}, epoch: {epoch}")
-
         # Try to load the model from the specified run and epoch
         assert self.repo is not None, "Repository is not initialized."
         model_loaded = False
