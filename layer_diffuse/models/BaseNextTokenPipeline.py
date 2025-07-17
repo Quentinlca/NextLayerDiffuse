@@ -1000,10 +1000,6 @@ class BaseNextTokenPipeline(ABC):
                 revision="main",
             )
             self.repo.git_pull(rebase=True)
-            self.repo.git_checkout(
-                revision="main", create_branch_ok=True
-            )  # Checkout the main branch
-            self.repo.git_pull(rebase=True)  # Pull the latest changes from the hub
         else:
             self.repo = None
 
@@ -1205,6 +1201,9 @@ class BaseNextTokenPipeline(ABC):
         print(f"Attempting to resume training from run: {run_name}, epoch: {epoch}")
 
         # Try to load the model from the specified run and epoch
+        assert self.repo is not None, "Repository is not initialized."
+        self.repo.git_checkout(revision="main", create_branch_ok=True)
+        self.repo.git_pull(rebase=True)  # Pull the latest changes from the hub
         model_loaded = False
         try:
             model_loaded = self.load_model_from_hub(run_name, epoch)
