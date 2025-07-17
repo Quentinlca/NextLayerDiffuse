@@ -225,6 +225,7 @@ class BaseNextTokenPipeline(ABC):
         self,
         dataloader,
         epoch: int,
+        global_step: int,
         generator: torch.Generator | None = None,
         num_inference_steps: int = 0,
     ) -> str:
@@ -292,26 +293,33 @@ class BaseNextTokenPipeline(ABC):
         if self.train_config.push_to_hub and self.repo is not None:
             print(f"Saving sample images to {self.train_config.output_dir} ...")
             self.repo.git_checkout(revision=self.train_id, create_branch_ok=True)
-            img.save(
-                os.path.join(
-                    self.train_config.output_dir, "result_epoch_{}.png".format(epoch)
-                )
-            )
-            self.repo.push_to_hub(commit_message=f"Sample images for epoch {epoch}")
-            img.close()
-            self.repo.git_checkout(revision='main', create_branch_ok=True)
-            self.repo.git_pull(rebase=True)
-            return os.path.join(
+            image_path = os.path.join(
                 self.train_config.output_dir, "result_epoch_{}.png".format(epoch)
             )
+            img.save(image_path)
+            self.repo.push_to_hub(commit_message=f"Sample images for epoch {epoch}")
+            self.repo.git_checkout(revision='main', create_branch_ok=True)
+            self.repo.git_pull(rebase=True)
         else:
             save_dir = os.path.join(self.train_config.backup_output_dir, self.train_id)
             if not os.path.exists(save_dir):
                 os.makedirs(save_dir)
             print(f"Saving sample images to {save_dir} ...")
-            img.save(os.path.join(save_dir, "result_epoch_{}.png".format(epoch)))
-            img.close()
-            return os.path.join(save_dir, "result_epoch_{}.png".format(epoch))
+            image_path = os.path.join(save_dir, "result_epoch_{}.png".format(epoch))
+            img.save(image_path)
+            
+        wandb.log(
+                    {
+                        "sample_images": wandb.Image(
+                            img, caption=f"Epoch {epoch} samples"
+                        ),
+                        "epoch": epoch,
+                        "step": global_step,
+                    }
+                )
+        
+        img.close()
+        return image_path
 
     def train_accelerate(
         self, train_dataloader, val_dataloader, train_size=1000, val_size=100, **params
@@ -672,19 +680,11 @@ class BaseNextTokenPipeline(ABC):
                     (global_epoch + 1) % self.train_config.save_image_epochs == 0
                     or global_epoch == self.train_config.num_epochs - 1
                 ):
-                    image_path = self.save_training_samples(
+                    _ = self.save_training_samples(
                         dataloader=val_dataloader,
                         epoch=global_epoch,
                         generator=random_generator,
-                    )
-                    wandb.log(
-                        {
-                            "sample_images": wandb.Image(
-                                image_path, caption=f"Epoch {global_epoch} samples"
-                            ),
-                            "epoch": global_epoch,
-                            "step": global_step,
-                        }
+                        global_step=global_step,
                     )
                 # Saving the model
                 if (
