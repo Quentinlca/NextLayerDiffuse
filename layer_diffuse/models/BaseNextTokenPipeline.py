@@ -292,7 +292,6 @@ class BaseNextTokenPipeline(ABC):
         if self.train_config.push_to_hub and self.repo is not None:
             print(f"Saving sample images to {self.train_config.output_dir} ...")
             self.repo.git_checkout(revision=self.train_id, create_branch_ok=True)
-            self.repo.git_pull(rebase=True)
             img.save(
                 os.path.join(
                     self.train_config.output_dir, "result_epoch_{}.png".format(epoch)
@@ -446,7 +445,6 @@ class BaseNextTokenPipeline(ABC):
                 )
                 # Create a new branch for this run with the name of the run
                 self.repo.git_checkout(revision=self.train_id, create_branch_ok=True)
-                self.repo.git_pull(rebase=True)
                 print(f"Created branch {self.train_id} in repository {self.train_config.hub_model_id}.")
                 self.repo.git_checkout(revision="main", create_branch_ok=True)
                 self.repo.git_pull(rebase=True)  # Pull the latest changes from the hub
@@ -717,7 +715,6 @@ class BaseNextTokenPipeline(ABC):
                 f"Saving model to {self.train_config.output_dir} : {commit_message} ..."
             )
             self.repo.git_checkout(revision=revision, create_branch_ok=True)
-            self.repo.git_pull(rebase=True)
             self.unet.save_pretrained(self.train_config.output_dir)
             response = self.repo.push_to_hub(commit_message=commit_message)
             if response is not None:
@@ -1007,7 +1004,6 @@ class BaseNextTokenPipeline(ABC):
         try:
             assert self.repo is not None, "Repository is not initialized."
             self.repo.git_checkout(revision=self.train_id, create_branch_ok=True)
-            self.repo.git_pull(rebase=True)  # Pull the latest changes from the hub
             api = wandb.Api()
             # Find the run in the project
             runs = api.runs(self.train_config.wandb_project_name)
