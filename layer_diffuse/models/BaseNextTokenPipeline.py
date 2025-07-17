@@ -988,9 +988,9 @@ class BaseNextTokenPipeline(ABC):
                     f"Created repository {self.train_config.hub_model_id} on Hugging Face Hub."
                 )
             # reset repository
-            if os.path.exists(self.train_config.output_dir):
-                shutil.rmtree(self.train_config.output_dir)
-            os.makedirs(self.train_config.output_dir, exist_ok=True)
+            # if os.path.exists(self.train_config.output_dir):
+            #     shutil.rmtree(self.train_config.output_dir)
+            # os.makedirs(self.train_config.output_dir, exist_ok=True)
             
             self.repo = huggingface_hub.Repository(
                 local_dir=self.train_config.output_dir,
@@ -1262,8 +1262,6 @@ class BaseNextTokenPipeline(ABC):
 
         # Update the train_id appropriately
         if model_loaded:
-            # Update the train_id to indicate this is a resumed run
-            self.train_id = f"resume_{run_name}_from_epoch_{epoch}_{time.strftime('%Y-%m-%d_%H-%M-%S')}"
             # Store resume information for wandb logging
             self.train_config.resume_from_run = run_name
             self.train_config.resume_from_epoch = epoch
