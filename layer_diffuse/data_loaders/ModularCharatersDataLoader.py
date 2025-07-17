@@ -78,12 +78,13 @@ class ModularCharactersDataLoader(torch.utils.data.DataLoader):
                 os.makedirs(cache_dir, exist_ok=True)
                 vocab_filename = f"{cache_dir}/vocab_{self.dataset_name.split('/')[-1]}_{self.split}.json"
 
-                if vocab_file_url and vocab_file_url.startswith("http"):
-                    response = requests.get(vocab_file_url)
-                    with open(vocab_filename, "w", encoding="utf-8") as f:
-                        f.write(response.content.decode("utf-8"))
-                    with open(vocab_filename, "r", encoding="utf-8") as f:
-                        vocab = json.load(f)
+                assert vocab_file_url and vocab_file_url.startswith("http")
+                response = requests.get(vocab_file_url)
+                with open(vocab_filename, "w", encoding="utf-8") as f:
+                    f.write(response.content.decode("utf-8"))
+                with open(vocab_filename, "r", encoding="utf-8") as f:
+                    vocab = json.load(f)
+                self.vocab = vocab
             except:
                 if isinstance(dataset, IterableDataset):
                     raise AssertionError("Vocab file URL not found in dataset description. If using an IterableDataset, vocab must be provided.")
