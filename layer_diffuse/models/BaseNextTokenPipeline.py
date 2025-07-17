@@ -793,7 +793,7 @@ class BaseNextTokenPipeline(ABC):
         self.unet.to(self.device)  # type: ignore
         self.model_version = f"{run}_epoch_{epoch}"
         print(f"Model loaded from version {self.model_version}.")
-        self.repo.git_checkout(revision=previous_revision, create_branch_ok=True)
+        self.repo.git_checkout(revision='main', create_branch_ok=True)
         self.repo.git_pull(rebase=True)
         return True
 
@@ -999,7 +999,6 @@ class BaseNextTokenPipeline(ABC):
                 git_email="quentin.leca@polytechnique.edu",
                 revision="main",
             )
-            self.repo.git_pull(rebase=True)
         else:
             self.repo = None
 
@@ -1202,9 +1201,6 @@ class BaseNextTokenPipeline(ABC):
 
         # Try to load the model from the specified run and epoch
         assert self.repo is not None, "Repository is not initialized."
-        print(f"DEBUG Current branch: {self.repo.current_branch}")
-        self.repo.git_checkout(revision="main", create_branch_ok=True)
-        self.repo.git_pull(rebase=False)  # Pull the latest changes from the hub
         model_loaded = False
         try:
             model_loaded = self.load_model_from_hub(run_name, epoch)
