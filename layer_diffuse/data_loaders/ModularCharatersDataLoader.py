@@ -95,11 +95,12 @@ class ModularCharactersDataLoader(torch.utils.data.DataLoader):
                     self.vocab = dict(zip(vocab, range(len(vocab))))
         else:
             self.vocab = vocab
+        print(f"Vocabulary loaded with size: {len(self.vocab)}")
+        
 
         preprocess = transforms.Compose(
             [
                 transforms.Resize((image_size, image_size)),
-                # transforms.RandomHorizontalFlip(),
                 transforms.ToTensor(),
                 transforms.Normalize([0.5], [0.5]),
             ]
