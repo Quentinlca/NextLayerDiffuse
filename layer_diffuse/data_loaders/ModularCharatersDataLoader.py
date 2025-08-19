@@ -128,6 +128,9 @@ class ModularCharactersDataLoader(torch.utils.data.DataLoader):
                 "target": images_target,
                 "label": class_labels,
             }
+        
+        
+            
 
         if isinstance(dataset, IterableDataset):
             dataset = dataset.map(transform, batched=True, remove_columns=["prompt"])  # type: ignore
@@ -150,6 +153,9 @@ class ModularCharactersDataLoader(torch.utils.data.DataLoader):
                 pin_memory=pin_memory,
                 persistent_workers=persistent_workers,
             )
+            
+    def get_prompt(self, int_label):
+            return list(self.vocab.keys())[list(self.vocab.values()).index(int_label.item())] if int_label.item() in self.vocab.values() else None
 
 
 def get_modular_char_dataloader(
