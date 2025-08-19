@@ -15,7 +15,7 @@ This repository contains code and experiments related to diffusion-based generat
 ## Installation
 
 ```bash
-git clone https://github.com/yourusername/next_layer_diffuse.git
+git clone https://github.com/yourusername/NextLayerDiffuse.git
 cd next_layer_diffuse
 pip install -r requirements.txt
 ```
