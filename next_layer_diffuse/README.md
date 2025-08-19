@@ -15,7 +15,7 @@ This repository contains code and experiments related to diffusion-based generat
 ## Installation
 
 ```bash
-git clone https://github.com/yourusername/NextLayerDiffuse.git
+git clone https://github.com/Quentinlca/NextLayerDiffuse.git
 cd next_layer_diffuse
 pip install -r requirements.txt
 ```
@@ -35,9 +35,6 @@ To train and use layer by layer models, use the `training.ipynb` notebook.
 - `constants.py` - Global constants
 - `training.ipynb` - Training loop
 
-## License
-
-TODO
 
 ## Contact
 
