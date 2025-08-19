@@ -1,12 +1,12 @@
 
-layer_diffuse/datasets/*
-!layer_diffuse/datasets
+next_layer_diffuse/datasets/*
+!next_layer_diffuse/datasets
 
-layer_diffuse/training_outputs/*
-!layer_diffuse/training_outputs
+next_layer_diffuse/training_outputs/*
+!next_layer_diffuse/training_outputs
 
-layer_diffuse/wandb/
-layer_diffuse/cache
+next_layer_diffuse/wandb/
+next_layer_diffuse/cache
 
 dataset_generator/generated_datasets/
 dataset_generator/characters.json

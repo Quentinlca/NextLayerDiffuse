@@ -1,4 +1,4 @@
-# Layer Diffuse
+# Next Layer Diffuse
 
 A layer by layer diffusion model implementation done for a DTU internship on layered image generation/decomposition
 
@@ -15,8 +15,8 @@ This repository contains code and experiments related to diffusion-based generat
 ## Installation
 
 ```bash
-git clone https://github.com/yourusername/layer_diffuse.git
-cd layer_diffuse
+git clone https://github.com/yourusername/next_layer_diffuse.git
+cd next_layer_diffuse
 pip install -r requirements.txt
 ```
 
